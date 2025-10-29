@@ -1,0 +1,295 @@
+:root{
+  --olive: #4b5320;
+  --army-dark: #233119;
+  --khaki: #c7b39f;
+  --sand: #e6dcc8;
+  --accent: #8b1f1f; /* use for small accents (red-tint from logo) */
+  --white: #ffffff;
+  --navy: #001a66; /* used for highlights / glow */
+}
+
+/* Base */
+body {
+  background: linear-gradient(180deg, #eef0e6 0%, #e2e6d6 100%);
+  color: var(--army-dark);
+  font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  margin: 0;
+}
+
+/* page fade-out for smooth navigation */
+body {
+  transition: opacity 320ms ease-in-out;
+  will-change: opacity;
+}
+body.page-out { opacity: 0; }
+
+/* Hero */
+.hero {
+  background: linear-gradient(90deg, rgba(35,49,25,0.95), rgba(75,83,32,0.95)), url('/static/images/Logo.png');
+  background-repeat: no-repeat;
+  background-position: 95% 50%;
+  background-size: 200px auto;
+  color: var(--khaki);
+  padding: 4rem 1rem;
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.25);
+}
+
+/* Logo sizes */
+.nav-logo { width: 44px; height: auto; border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.25); }
+.logo { width: 140px; height: auto; display: block; margin: 1rem auto; }
+
+/* Navbar */
+.navbar {
+  background: var(--army-dark) !important;
+  border-bottom: 4px solid var(--olive);
+}
+.navbar .navbar-brand { color: var(--khaki) !important; font-weight: 800; letter-spacing: .6px; }
+.navbar .nav-link {
+  color: var(--khaki) !important;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.95rem;
+}
+.navbar .nav-link:hover,
+.navbar .nav-link:focus { color: var(--sand) !important; text-decoration: underline; }
+
+/* Buttons */
+.btn-mil {
+  background: var(--olive);
+  color: var(--khaki);
+  border: 2px solid rgba(0,0,0,0.08);
+  padding: .6rem 1.1rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.18);
+}
+.btn-mil:hover { background: var(--army-dark); color: var(--sand); }
+
+/* Product cards */
+.card-mil {
+  background: linear-gradient(180deg, #fbf8f2, #f0ead9);
+  border: 2px solid rgba(35,49,25,0.12);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(35,49,25,0.06);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+  transition: transform 220ms cubic-bezier(.2,.9,.3,1), box-shadow 220ms ease, z-index 220ms;
+  will-change: transform;
+  transform-origin: center top;
+  overflow: visible; /* allow overflow where needed */
+}
+/* image for product cards */
+.product-img {
+  width: 100%;
+  height: 160px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid rgba(0,0,0,0.06);
+}
+
+/* special handling for wide / low-profile aircraft like the B-2:
+   keep whole silhouette visible, center subject and allow taller display */
+.product-img-b2 {
+  object-fit: contain;
+  object-position: center top;
+  height: 220px;
+  background: linear-gradient(180deg,#fbf8f2,#f0ead9);
+  padding: 6px;                 /* fixed typo */
+  border-radius: 6px;
+  border: 1px solid rgba(0,0,0,0.06);
+  transition: transform 220ms ease;
+  transform-origin: center center;
+  width: 100%;                  /* ensure it stays inside the card */
+  transform: scaleX(1.06) scaleY(1.02); /* visual widen without increasing layout width */
+}
+
+@media (max-width:575px) {
+  .product-img-b2 {
+    width: 100%;
+    height: 140px;
+    padding: 4px;
+    transform: none;
+  }
+}
+
+/* responsive tweak */
+@media (max-width:575px) {
+  .product-img-b2 { width: 100%; margin-left: 0; height: 140px; }
+}
+/* make the B-2 appear slightly wider (and a touch larger on hover) */
+.product-img-b2 { transform: scaleX(1.06) scaleY(1.02); }
+.product-img-b2:hover { transform: scaleX(1.08) scaleY(1.03); }
+/* responsive tweak */
+@media (max-width: 575px) {
+  .product-img-b2 { height: 140px; padding: 4px; }
+}
+.card-mil .card-title { color: var(--army-dark); font-weight: 800; }
+.card-mil .price { color: var(--olive); font-weight: 800; }
+
+/* highlight style applied to the selected product on products page */
+.product-highlight {
+  border-left: 6px solid var(--navy);
+  box-shadow: 0 18px 48px rgba(0,26,102,0.12), 0 6px 18px rgba(0,0,0,0.10);
+  transform: translateY(-6px);
+  animation: product-pulse 1.6s ease-in-out 2;
+  z-index: 2;
+}
+
+/* gentle pulse so user sees the highlight */
+@keyframes product-pulse {
+  0%   { box-shadow: 0 10px 30px rgba(0,26,102,0.06); }
+  50%  { box-shadow: 0 20px 50px rgba(0,26,102,0.14); }
+  100% { box-shadow: 0 10px 30px rgba(0,26,102,0.06); }
+}
+
+/* ensure product cards remain layout-stable when highlighted */
+.card-mil.product-highlight { margin-top: 0; margin-bottom: 0; }
+
+/* smooth hover-enlarge for product cards (home + products) */
+.card-mil:hover,
+.card-mil:focus-within {
+  transform: translateY(-8px) scale(1.03);
+  box-shadow: 0 22px 48px rgba(35,49,25,0.14), 0 8px 24px rgba(0,0,0,0.12);
+  z-index: 3;
+}
+
+/* keep product-highlight visible but allow hover to increase scale a touch more */
+.card-mil.product-highlight {
+  transform: translateY(-6px) scale(1.02);
+}
+.card-mil.product-highlight:hover {
+  transform: translateY(-8px) scale(1.05);
+}
+
+/* Grid utilities */
+.product-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap: 1rem; }
+
+/* Footer */
+footer {
+  background: var(--army-dark);
+  color: var(--khaki);
+  border-top: 4px solid var(--olive);
+  padding: 1rem 0;
+  margin-top: 2rem;
+  text-align: center;
+}
+
+/* Small utility */
+.muted-sand { color: var(--sand); }
+.badge-mil { background: var(--olive); color: var(--khaki); font-weight:700; padding:.35rem .5rem; border-radius:4px; }
+
+/* new: improve readability when content sits over textured / dark backgrounds */
+.content-panel {
+  background: rgba(255,255,255,0.96); /* near-solid panel so text stays readable */
+  color: var(--army-dark);
+  padding: 2rem;
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(0,0,0,0.15);
+}
+
+/* make headings inside panels stronger */
+.content-panel h1,
+.content-panel h2,
+.content-panel h3 {
+  color: var(--army-dark);
+  text-transform: none;
+}
+
+/* subtle brand subtitle next to MachZero */
+.brand-sub {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--sand);
+  font-weight: 700;
+  margin-top: 2px;
+}
+
+/* mobile spacing fix */
+@media (max-width: 575px) {
+  .content-panel { padding: 1rem; }
+  .nav-logo { width: 36px; }
+}
+
+/* subtle floating animation for GIF product card */
+@keyframes float-slight {
+  0%   { transform: translateY(0) rotate(0deg); }
+  50%  { transform: translateY(-6px) rotate(-0.5deg); }
+  100% { transform: translateY(0) rotate(0deg); }
+}
+
+.gif-card {
+  will-change: transform;
+  animation: float-slight 4.5s ease-in-out infinite;
+  /* tiny shadow boost so movement is more visible */
+  box-shadow: 0 14px 34px rgba(35,49,25,0.08);
+  transition: transform 220ms cubic-bezier(.2,.9,.3,1), box-shadow 220ms ease;
+}
+.gif-card:hover {
+  transform: translateY(-10px) scale(1.05);
+  box-shadow: 0 28px 60px rgba(0,26,102,0.16);
+  z-index: 4;
+}
+
+/* respect prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .card-mil, .gif-card {
+    transition: none !important;
+    animation: none !important;
+    transform: none !important;
+    box-shadow: none !important;
+  }
+}
+
+/* micro-transaction modal (demo) */
+.micro-modal {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.55);
+  z-index: 1200;
+  padding: 1rem;
+}
+.micro-modal.show { display: flex; }
+.micro-modal-card {
+  width: 100%;
+  max-width: 520px;
+  background: linear-gradient(180deg,#fff,#f6f3ea);
+  border-radius: 10px;
+  padding: 1.25rem;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+  position: relative;
+}
+.micro-modal-card h4 { margin-top: 0; color: var(--army-dark); }
+.micro-modal-card .form-label { font-weight:600; font-size:0.85rem; color: #333; }
+.micro-close { position:absolute; right:0.6rem; top:0.4rem; background:none; border:none; font-size:1.25rem; color:#444; cursor:pointer; }
+.micro-processing { display:none; align-items:center; gap:0.6rem; margin-top:0.8rem; color:var(--white); }
+.micro-processing .spinner-border { width:1.3rem; height:1.3rem; border-width:0.18rem; }
+.micro-processing.visible { display:flex; }
+/* small responsiveness */
+@media (max-width:520px) {
+  .micro-modal-card { padding: .9rem; }
+}
+
+/* AC-130: keep full card width but use a slightly taller image that intentionally crops details */
+.product-img-ac130 {
+  width: 100%;
+  height: 400px;              /* slightly taller so important parts may be cropped */
+  object-fit: cover;          /* cover will crop to fill the box */
+  object-position: 50% 28%;   /* shift vertical crop to cut some nose/tail detail */
+  border-radius: 6px;
+  border: 1px solid rgba(0,0,0,0.06);
+  background: linear-gradient(180deg,#fbf8f2,#f0ead9);
+}
+
+/* responsive tweak */
+@media (max-width: 575px) {
+  .product-img-ac130 { height: 400px; }
+}
+
+/* clip overflow only for the B-2 product card */
+#product-b2.card-mil { overflow: hidden; }

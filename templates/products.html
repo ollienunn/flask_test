@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Webstore – Products</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+  <script src="{{ url_for('static', filename='js/transition.js') }}" defer></script>
+</head>
+<body>
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom shadow-sm">
+    <div class="container">
+      <a class="navbar-brand fw-bold" href="{{ url_for('index') }}">
+        <img src="{{ url_for('static', filename='images/Logo.png') }}" alt="Logo" class="nav-logo">
+        Webstore
+      </a>
+      <div class="collapse navbar-collapse">
+        <ul class="navbar-nav ms-auto">
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('index') }}">Home</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('about') }}">About</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('products') }}">Products</a></li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+ 
+  <!-- Main content -->
+  <main class="container py-5">
+    <h1 class="mb-4">Products</h1>
+
+    {# Group known SKUs so we can render in the exact layout requested #}
+    {% set ns = namespace(f35=None, fa18=None, growler=None, b2=None, ac130=None, others=[]) %}
+    {% for p in products %}
+      {% set sku = p.sku|lower %}
+      {% if sku == 'f35' %}
+        {% set ns.f35 = p %}
+      {% elif sku == 'fa18' %}
+        {% set ns.fa18 = p %}
+      {% elif sku == 'growler' %}
+        {% set ns.growler = p %}
+      {% elif sku == 'b2' %}
+        {% set ns.b2 = p %}
+      {% elif sku == 'ac130' %}
+        {% set ns.ac130 = p %}
+      {% else %}
+        {% set ns.others = ns.others + [p] %}
+      {% endif %}
+    {% endfor %}
+
+    {# Row 1: F-35, F/A-18, Growler (3-up) #}
+    <div class="row g-3">
+      {% for p in [ns.f35, ns.fa18, ns.growler] %}
+        {% if p %}
+        <div class="col-12 col-md-4">
+          <div id="product-{{ p.sku|lower }}" class="card-mil {% if p.sku|lower == 'f35' %}gif-card{% endif %}">
+            <img src="{{ url_for('static', filename=p.image) }}" alt="{{ p.name }}" class="product-img {% if p.sku|lower == 'b2' %}product-img-b2{% endif %} {% if p.sku|lower == 'ac130' %}product-img-ac130{% endif %}">
+            <h5 class="card-title">{{ p.name }}</h5>
+            <p>{{ p.description }}</p>
+            <div class="d-flex justify-content-between align-items-center">
+              <div class="price">${{ "{:,.0f}".format(p.price) }}</div>
+              <a class="btn btn-mil" href="#">Enquire</a>
+            </div>
+          </div>
+        </div>
+        {% else %}
+        <div class="col-12 col-md-4"></div>
+        {% endif %}
+      {% endfor %}
+    </div>
+
+    {# Row 2: B-2 full-width #}
+    {% if ns.b2 %}
+    <div class="row g-3 mt-3">
+      <div class="col-12">
+        <div id="product-{{ ns.b2.sku|lower }}" class="card-mil">
+          <img src="{{ url_for('static', filename=ns.b2.image) }}" alt="{{ ns.b2.name }}" class="product-img product-img-b2">
+          <h5 class="card-title">{{ ns.b2.name }}</h5>
+          <p>{{ ns.b2.description }}</p>
+          <div class="d-flex justify-content-between align-items-center">
+            <div class="price">${{ "{:,.0f}".format(ns.b2.price) }}</div>
+            <a class="btn btn-mil" href="#">Enquire</a>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    {# Row 3: AC-130 full-width #}
+    {% if ns.ac130 %}
+    <div class="row g-3 mt-3">
+      <div class="col-12">
+        <div id="product-{{ ns.ac130.sku|lower }}" class="card-mil">
+          <img src="{{ url_for('static', filename=ns.ac130.image) }}" alt="{{ ns.ac130.name }}" class="product-img product-img-ac130">
+          <h5 class="card-title">{{ ns.ac130.name }}</h5>
+          <p>{{ ns.ac130.description }}</p>
+          <div class="d-flex justify-content-between align-items-center">
+            <div class="price">${{ "{:,.0f}".format(ns.ac130.price) }}</div>
+            <a class="btn btn-mil" href="#">Enquire</a>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    {# Any remaining products (render 3-up rows) #}
+    {% if ns.others %}
+      {% for chunk_start in range(0, ns.others|length, 3) %}
+        <div class="row g-3 mt-3">
+          {% for p in ns.others[chunk_start:chunk_start+3] %}
+          <div class="col-12 col-md-4">
+            <div id="product-{{ p.sku|lower }}" class="card-mil">
+              <img src="{{ url_for('static', filename=p.image) }}" alt="{{ p.name }}" class="product-img">
+              <h5 class="card-title">{{ p.name }}</h5>
+              <p>{{ p.description }}</p>
+              <div class="d-flex justify-content-between align-items-center">
+                <div class="price">${{ "{:,.0f}".format(p.price) }}</div>
+                <a class="btn btn-mil" href="#">Enquire</a>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      {% endfor %}
+    {% endif %}
+
+  </main>
+ 
+   <!-- Footer -->
+   <footer>
+     <div class="container">
+       &copy; {{ 2025 }} Webstore — MachZero.
+     </div>
+   </footer>
+ 
+  <script>
+    // read ?selected=... and highlight + scroll that product into view
+    document.addEventListener('DOMContentLoaded', function () {
+      const params = new URLSearchParams(window.location.search);
+      const selected = params.get('selected');
+      if (!selected) return;
+      const el = document.getElementById('product-' + selected);
+      if (!el) return;
+      // small delay so page renders then perform smooth scroll + highlight
+      setTimeout(function () {
+        el.classList.add('product-highlight');
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // ensure pronounced focus for keyboard users
+        el.setAttribute('tabindex', '-1');
+        el.focus({ preventScroll: true });
+      }, 180);
+    });
+  </script>
+ </body>
+ </html>

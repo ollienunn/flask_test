@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Webstore – About</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+  <script src="{{ url_for('static', filename='js/transition.js') }}" defer></script>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom shadow-sm">
+      <div class="container">
+      <a class="navbar-brand fw-bold" href="{{ url_for('index') }}">
+        <img src="{{ url_for('static', filename='images/Logo.png') }}" alt="Logo" class="nav-logo">
+        MachZero
+        <span class="brand-sub">Aircraft & support — RAAF supplier</span>
+      </a>
+       <div class="collapse navbar-collapse">
+         <ul class="navbar-nav ms-auto">
+           <li class="nav-item"><a class="nav-link" href="{{ url_for('index') }}">Home</a></li>
+           <li class="nav-item"><a class="nav-link" href="{{ url_for('about') }}">About</a></li>
+           <li class="nav-item"><a class="nav-link" href="{{ url_for('products') }}">Products</a></li>
+         </ul>
+       </div>
+     </div>
+   </nav>
+  
+   <!-- Main content -->
+  <main class="container py-5 content-panel">
+    <h1 class="mb-3">About MachZero — Aircraft & Support for the RAAF</h1>
+ 
+     <div class="row">
+       <div class="col-md-7">
+        <p class="lead muted-sand">MachZero supplies aircraft, parts and operational support tailored for RAAF requirements. We focus on safety, reliability and mission-readiness.</p>
+ 
+         <h5 class="mt-4">Our mission</h5>
+        <p>To deliver aircraft and lifecycle support that meet rigorous operational standards. We test systems under realistic conditions to ensure long term readiness.</p>
+ 
+         <h5 class="mt-3">Core values</h5>
+         <ul>
+           <li>Durability</li>
+           <li>Function over fashion</li>
+           <li>Customer readiness & safety</li>
+           <li>Integrity in all we do</li>
+           <li>100% Legal </li>
+         </ul>
+       </div>
+ 
+       <div class="col-md-5">
+        <div class="card-mil p-3">
+          <h5 class="card-title">Contact</h5>
+          <p>MachZero HQ — <strong>support@machzero.example</strong></p>
+          <p>
+            <button id="support-btn" type="button" class="badge-mil support-btn">Support</button>
+            Operating hours: 09:00 — 17:00
+          </p>
+           <p class="mt-2"><small class="text-muted">For RAAF procurement enquiries contact our sales desk.</small></p>
+         </div>
+ 
+         <div class="mt-3 card-mil p-3">
+           <h6>History</h6>
+          <p>Founded to deliver practical, proven aircraft and support services for demanding operational environments.</p>
+         </div>
+       </div>
+     </div>
+   </main>
+ 
+   <!-- Footer -->
+   <footer>
+     <div class="container">
+       &copy; {{ 2025 }} Webstore — MachZero.
+     </div>
+   </footer>
+
+   <!-- add modal (place before footer) -->
+<div id="micro-pay-modal" class="micro-modal" aria-hidden="true">
+  <div class="micro-modal-card" role="dialog" aria-modal="true" aria-labelledby="micro-pay-title">
+    <button class="micro-close modal-close" aria-label="Close">&times;</button>
+    <h4 id="micro-pay-title">Support MachZero — Micro donation</h4>
+    <p class="muted-sand">Secure demo payment — no real transaction will be made.</p>
+
+    <form id="micro-pay-form">
+      <div class="mb-2">
+        <label class="form-label">Amount</label>
+        <select name="amount" class="form-select">
+          <option value="1.00">AUD $1.00</option>
+          <option value="5.00">AUD $5.00</option>
+          <option value="10.00">AUD $10.00</option>
+        </select>
+      </div>
+
+      <div class="mb-2">
+        <label class="form-label">Card number</label>
+        <input name="card" class="form-control" inputmode="numeric" placeholder="4242 4242 4242 4242" required>
+      </div>
+
+      <div class="d-flex gap-2 mb-3">
+        <div style="flex:1">
+          <label class="form-label">Expiry (MM/YY)</label>
+          <input name="exp" class="form-control" placeholder="08/27" required>
+        </div>
+        <div style="width:120px">
+          <label class="form-label">CVC</label>
+          <input name="cvc" class="form-control" inputmode="numeric" placeholder="123" required>
+        </div>
+      </div>
+
+      <div class="mb-2">
+        <div id="micro-pay-error" class="text-danger small" style="display:none;"></div>
+        <div id="micro-pay-success" class="text-success small" style="display:none;"></div>
+      </div>
+
+      <div class="d-flex justify-content-between align-items-center">
+        <button type="button" class="btn btn-outline-secondary modal-close">Cancel</button>
+        <button type="submit" class="btn btn-mil">Pay</button>
+      </div>
+    </form>
+
+    <div id="micro-pay-processing" class="micro-processing" aria-hidden="true">
+      <div class="spinner-border text-light" role="status" aria-hidden="true"></div>
+      <div class="ms-2">Processing...</div>
+    </div>
+  </div>
+</div>
+
+<!-- include the client script -->
+<script src="{{ url_for('static', filename='js/payment.js') }}" defer></script>
+  
+ </body>
+ </html>
