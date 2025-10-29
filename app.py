@@ -3,6 +3,8 @@ import sqlite3
 from pathlib import Path
 from werkzeug.utils import secure_filename
 from flask import request, redirect, url_for, render_template
+import re
+from datetime import datetime
 
 app = Flask(__name__)
 
@@ -98,6 +100,64 @@ def admin_products():
     # GET: load products from DB and render editor
     products = get_products()
     return render_template("edit_products.html", products=products)
+
+def _make_sku_candidate(name):
+    cand = re.sub(r'[^A-Za-z0-9]+', '-', (name or '').strip()).strip('-').upper()
+    if not cand:
+        cand = 'SKU'
+    return cand[:30]
+
+def _unique_sku(db, base):
+    sku = base
+    suffix = 1
+    while True:
+        cur = db.execute("SELECT 1 FROM products WHERE sku = ?", (sku,)).fetchone()
+        if not cur:
+            return sku
+        sku = f"{base[:24]}-{suffix}"
+        suffix += 1
+
+@app.route("/admin/products/add", methods=["POST"])
+def admin_add_product():
+    db = get_db()
+    name = (request.form.get("name") or "").strip()
+    sku = (request.form.get("sku") or "").strip().upper()
+    description = (request.form.get("description") or "").strip()
+    price_raw = (request.form.get("price") or "").replace(",", "").strip()
+    try:
+        price_val = float(price_raw) if price_raw != "" else 0.0
+    except ValueError:
+        price_val = 0.0
+
+    # image upload
+    image_file = request.files.get("image")
+    image_path = None
+    if image_file and image_file.filename:
+        images_dir = Path(__file__).parent / "static" / "images"
+        images_dir.mkdir(parents=True, exist_ok=True)
+        filename = secure_filename(image_file.filename)
+        dest = images_dir / filename
+        image_file.save(str(dest))
+        image_path = f"images/{filename}"
+
+    # generate SKU if missing and ensure uniqueness
+    if not sku:
+        base = _make_sku_candidate(name)
+        sku = _unique_sku(db, base)
+    else:
+        sku = _unique_sku(db, sku.upper())
+
+    created_at = datetime.utcnow().isoformat()
+
+    try:
+        db.execute(
+            "INSERT INTO products (sku, name, description, price, image, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (sku, name, description, price_val, image_path, created_at)
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+    return redirect(url_for("admin_products"))
 
 if __name__ == "__main__":
     app.run(debug=True)
