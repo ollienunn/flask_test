@@ -1,13 +1,11 @@
-from flask import Flask, render_template, g, request
+from flask import Flask, render_template, g, request, redirect, url_for, jsonify
 import sqlite3
 from pathlib import Path
-from werkzeug.utils import secure_filename
-from flask import request, redirect, url_for, render_template
-import re
 from datetime import datetime
+import re
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
-
 DB_PATH = Path(__file__).parent / "store.db"
 
 def get_db():
@@ -26,14 +24,8 @@ def close_db(exc):
 def get_products(limit=None):
     db = get_db()
     sql = "SELECT id, sku, name, description, price, image FROM products ORDER BY id"
-    if limit:
-        sql += " LIMIT ?"
-        cur = db.execute(sql, (limit,))
-    else:
-        cur = db.execute(sql)
-    rows = cur.fetchall()
-    # convert to list of dicts for Jinja
-    return [dict(r) for r in rows]
+    cur = db.execute(sql) if not limit else db.execute(sql + " LIMIT ?", (limit,))
+    return [dict(r) for r in cur.fetchall()]
 
 @app.route("/")
 def index():
@@ -46,27 +38,26 @@ def about():
 
 @app.route("/products")
 def products():
-    products = get_products()
-    selected = request.args.get('selected')  # kept for client-side highlight logic if used
-    return render_template("products.html", products=products, selected=selected)
+    prods = get_products()
+    return render_template("products.html", products=prods)
 
+# admin: list & update products (POST from each product card)
 @app.route("/admin/products", methods=["GET", "POST"])
 def admin_products():
     db = get_db()
     if request.method == "POST":
-        sku = request.form.get("sku")
+        sku = (request.form.get("sku") or "").strip()
         if not sku:
             return redirect(url_for("admin_products"))
 
-        name = request.form.get("name", "").strip()
-        description = request.form.get("description", "").strip()
-        price_raw = request.form.get("price", "").replace(",", "").strip()
+        name = (request.form.get("name") or "").strip()
+        description = (request.form.get("description") or "").strip()
+        price_raw = (request.form.get("price") or "").replace(",", "").strip()
         try:
             price_val = float(price_raw) if price_raw != "" else None
         except ValueError:
             price_val = None
 
-        # handle image upload
         image_file = request.files.get("image")
         image_path = None
         if image_file and image_file.filename:
@@ -77,30 +68,32 @@ def admin_products():
             image_file.save(str(dest))
             image_path = f"images/{filename}"
 
-        # build update statement
-        if price_val is None:
-            # If price invalid, skip updating price
-            if image_path:
-                db.execute("UPDATE products SET name = ?, description = ?, image = ? WHERE sku = ?",
-                           (name, description, image_path, sku))
-            else:
-                db.execute("UPDATE products SET name = ?, description = ? WHERE sku = ?",
-                           (name, description, sku))
-        else:
-            if image_path:
-                db.execute("UPDATE products SET name = ?, description = ?, price = ?, image = ? WHERE sku = ?",
-                           (name, description, price_val, image_path, sku))
-            else:
-                db.execute("UPDATE products SET name = ?, description = ?, price = ? WHERE sku = ?",
-                           (name, description, price_val, sku))
+        # build update based on provided fields
+        params = []
+        set_parts = []
+        if name != "":
+            set_parts.append("name = ?"); params.append(name)
+        if description != "":
+            set_parts.append("description = ?"); params.append(description)
+        if price_val is not None:
+            set_parts.append("price = ?"); params.append(price_val)
+        if image_path:
+            set_parts.append("image = ?"); params.append(image_path)
 
-        db.commit()
+        if set_parts:
+            sql = "UPDATE products SET " + ", ".join(set_parts) + " WHERE sku = ?"
+            params.append(sku)
+            try:
+                db.execute(sql, params)
+                db.commit()
+            except Exception:
+                db.rollback()
         return redirect(url_for("admin_products"))
 
-    # GET: load products from DB and render editor
     products = get_products()
     return render_template("edit_products.html", products=products)
 
+# helpers for adding new products
 def _make_sku_candidate(name):
     cand = re.sub(r'[^A-Za-z0-9]+', '-', (name or '').strip()).strip('-').upper()
     if not cand:
@@ -154,6 +147,30 @@ def admin_add_product():
             "INSERT INTO products (sku, name, description, price, image, created_at) VALUES (?, ?, ?, ?, ?, ?)",
             (sku, name, description, price_val, image_path, created_at)
         )
+        db.commit()
+    except Exception:
+        db.rollback()
+    return redirect(url_for("admin_products"))
+
+@app.route("/admin/products/delete", methods=["POST"])
+def admin_delete_product():
+    db = get_db()
+    sku = (request.form.get("sku") or "").strip()
+    if not sku:
+        return redirect(url_for("admin_products"))
+
+    cur = db.execute("SELECT id FROM products WHERE sku = ?", (sku,)).fetchone()
+    if not cur:
+        return redirect(url_for("admin_products"))
+
+    product_id = cur["id"]
+    # prevent deletion when referenced by order_items
+    ref = db.execute("SELECT COUNT(*) AS cnt FROM order_items WHERE product_id = ?", (product_id,)).fetchone()
+    if ref and ref["cnt"] > 0:
+        return redirect(url_for("admin_products", error="in_use"))
+
+    try:
+        db.execute("DELETE FROM products WHERE id = ?", (product_id,))
         db.commit()
     except Exception:
         db.rollback()
