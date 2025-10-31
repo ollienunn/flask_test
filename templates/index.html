@@ -12,7 +12,7 @@
 <body class="bg-light text-dark">
  
   <!-- Navbar -->
-  <nav class="navbar navbar-expand-lg navbar-dark">
+  <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom shadow-sm">
     <div class="container">
       <a class="navbar-brand fw-bold" href="{{ url_for('index') }}">
         <img src="{{ url_for('static', filename='images/Logo.png') }}" alt="Logo" class="nav-logo">
@@ -24,6 +24,14 @@
           <li class="nav-item"><a class="nav-link" href="{{ url_for('about') }}">About</a></li>
           <li class="nav-item"><a class="nav-link" href="{{ url_for('products') }}">Products</a></li>
         </ul>
+      </div>
+      <div class="ms-auto d-flex align-items-center">
+        {% if session.get('is_admin') %}
+          <a href="{{ url_for('admin_products') }}" class="btn btn-sm btn-outline-dark me-2">Admin</a>
+          <a href="{{ url_for('logout') }}" class="btn btn-sm btn-outline-secondary">Logout</a>
+        {% else %}
+          <a href="{{ url_for('login') }}" class="btn btn-sm btn-outline-primary">Admin login</a>
+        {% endif %}
       </div>
     </div>
   </nav>

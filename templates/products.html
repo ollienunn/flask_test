@@ -54,7 +54,7 @@
       {% for p in [ns.f35, ns.fa18, ns.growler] %}
         {% if p %}
         <div class="col-12 col-md-4">
-          <div id="product-{{ p.sku|lower }}" class="card-mil {% if p.sku|lower == 'f35' %}gif-card{% endif %}">
+          <div id="product-{{ p.sku|lower }}" class="card-mil">
             <img src="{{ url_for('static', filename=p.image) }}" alt="{{ p.name }}" class="product-img {% if p.sku|lower == 'b2' %}product-img-b2{% endif %} {% if p.sku|lower == 'ac130' %}product-img-ac130{% endif %}">
             <h5 class="card-title">{{ p.name }}</h5>
             <p>{{ p.description }}</p>

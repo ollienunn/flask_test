@@ -1,12 +1,15 @@
-from flask import Flask, render_template, g, request, redirect, url_for, jsonify
+from flask import Flask, render_template, g, request, redirect, url_for, jsonify, session, flash
 import sqlite3
 from pathlib import Path
 from datetime import datetime
 import re
 from werkzeug.utils import secure_filename
+import os
+from functools import wraps
 
 app = Flask(__name__)
 DB_PATH = Path(__file__).parent / "store.db"
+app.secret_key = os.environ.get("FLASK_SECRET", "dev-secret-please-change")
 
 def get_db():
     if 'db' not in g:
@@ -43,6 +46,7 @@ def products():
 
 # admin: list & update products (POST from each product card)
 @app.route("/admin/products", methods=["GET", "POST"])
+@login_required
 def admin_products():
     db = get_db()
     if request.method == "POST":
@@ -119,6 +123,7 @@ def _unique_sku(db, base):
 
 # admin add product: accept stock
 @app.route("/admin/products/add", methods=["POST"])
+@login_required
 def admin_add_product():
     db = get_db()
     name = (request.form.get("name") or "").strip()
@@ -163,6 +168,7 @@ def admin_add_product():
     return redirect(url_for("admin_products"))
 
 @app.route("/admin/products/delete", methods=["POST"])
+@login_required
 def admin_delete_product():
     db = get_db()
     sku = (request.form.get("sku") or "").strip()
@@ -185,6 +191,34 @@ def admin_delete_product():
     except Exception:
         db.rollback()
     return redirect(url_for("admin_products"))
+
+# simple login_required decorator
+def login_required(f):
+    @wraps(f)
+    def wrapped(*args, **kwargs):
+        if not session.get("is_admin"):
+            return redirect(url_for("login", next=request.path))
+        return f(*args, **kwargs)
+    return wrapped
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        username = (request.form.get("username") or "").strip()
+        password = (request.form.get("password") or "").strip()
+        ADMIN_USER = os.environ.get("ADMIN_USER", "admin")
+        ADMIN_PASS = os.environ.get("ADMIN_PASS", "password")
+        if username == ADMIN_USER and password == ADMIN_PASS:
+            session["is_admin"] = True
+            next_url = request.args.get("next") or url_for("admin_products")
+            return redirect(next_url)
+        flash("Invalid credentials", "danger")
+    return render_template("login.html")
+
+@app.route("/logout")
+def logout():
+    session.pop("is_admin", None)
+    return redirect(url_for("index"))
 
 if __name__ == "__main__":
     app.run(debug=True)
