@@ -6,10 +6,20 @@ import re
 from werkzeug.utils import secure_filename
 import os
 from functools import wraps
+from flask import session, flash
 
 app = Flask(__name__)
 DB_PATH = Path(__file__).parent / "store.db"
 app.secret_key = os.environ.get("FLASK_SECRET", "dev-secret-please-change")
+
+# simple login_required decorator
+def login_required(f):
+    @wraps(f)
+    def wrapped(*args, **kwargs):
+        if not session.get("is_admin"):
+            return redirect(url_for("login", next=request.path))
+        return f(*args, **kwargs)
+    return wrapped
 
 def get_db():
     if 'db' not in g:
@@ -192,22 +202,13 @@ def admin_delete_product():
         db.rollback()
     return redirect(url_for("admin_products"))
 
-# simple login_required decorator
-def login_required(f):
-    @wraps(f)
-    def wrapped(*args, **kwargs):
-        if not session.get("is_admin"):
-            return redirect(url_for("login", next=request.path))
-        return f(*args, **kwargs)
-    return wrapped
-
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
         username = (request.form.get("username") or "").strip()
         password = (request.form.get("password") or "").strip()
-        ADMIN_USER = os.environ.get("ADMIN_USER", "admin")
-        ADMIN_PASS = os.environ.get("ADMIN_PASS", "password")
+        ADMIN_USER = os.environ.get("ADMIN_USER", "Admin")
+        ADMIN_PASS = os.environ.get("ADMIN_PASS", "MachZeroOwner")
         if username == ADMIN_USER and password == ADMIN_PASS:
             session["is_admin"] = True
             next_url = request.args.get("next") or url_for("admin_products")
