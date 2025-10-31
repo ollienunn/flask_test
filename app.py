@@ -7,6 +7,7 @@ from werkzeug.utils import secure_filename
 import os
 from functools import wraps
 from flask import session, flash
+from flask import Markup  # small helper if needed for flashes
 
 app = Flask(__name__)
 DB_PATH = Path(__file__).parent / "store.db"
@@ -221,5 +222,172 @@ def logout():
     session.pop("is_admin", None)
     return redirect(url_for("index"))
 
-if __name__ == "__main__":
-    app.run(debug=True)
+# -- Cart helpers ------------------------------------------------
+def _cart_get():
+    return session.setdefault("cart", {})  # { sku: qty }
+
+def _cart_set(cart):
+    session["cart"] = cart
+    session.modified = True
+
+# -- Add to cart -------------------------------------------------
+@app.route("/cart/add", methods=["POST"])
+def cart_add():
+    sku = (request.form.get("sku") or "").strip().upper()
+    try:
+        qty = int(request.form.get("qty") or 1)
+    except ValueError:
+        qty = 1
+    if qty < 1:
+        qty = 1
+
+    db = get_db()
+    prod = db.execute("SELECT sku, stock FROM products WHERE sku = ?", (sku,)).fetchone()
+    if not prod:
+        flash("Product not found.", "danger")
+        return redirect(request.referrer or url_for("products"))
+
+    # don't add more than stock
+    available = prod["stock"] or 0
+    cart = _cart_get()
+    current = cart.get(sku, 0)
+    desired = current + qty
+    if desired > available:
+        flash(f"Only {available} units available for {sku}.", "warning")
+        # set to max available
+        cart[sku] = available
+    else:
+        cart[sku] = desired
+    _cart_set(cart)
+    flash("Added to cart.", "success")
+    return redirect(request.referrer or url_for("products"))
+
+# -- View / update cart -----------------------------------------
+@app.route("/cart", methods=["GET"])
+def cart_view():
+    cart = _cart_get()
+    items = []
+    total = 0.0
+    if cart:
+        db = get_db()
+        placeholders = ",".join("?" for _ in cart.keys())
+        rows = db.execute(f"SELECT id, sku, name, price, image, stock FROM products WHERE sku IN ({placeholders})", tuple(cart.keys())).fetchall()
+        prod_map = {r["sku"]: dict(r) for r in rows}
+        for sku, qty in cart.items():
+            p = prod_map.get(sku)
+            if not p:
+                continue
+            subtotal = (p["price"] or 0.0) * qty
+            total += subtotal
+            items.append({"product": p, "qty": qty, "subtotal": subtotal})
+    return render_template("cart.html", items=items, total=total)
+
+@app.route("/cart/update", methods=["POST"])
+def cart_update():
+    # supports quantity updates and removal
+    cart = _cart_get()
+    action = request.form.get("action")
+    sku = (request.form.get("sku") or "").strip().upper()
+    if action == "remove":
+        cart.pop(sku, None)
+    elif action == "set":
+        try:
+            qty = int(request.form.get("qty") or 0)
+        except ValueError:
+            qty = 0
+        if qty <= 0:
+            cart.pop(sku, None)
+        else:
+            # clamp to available stock
+            db = get_db()
+            prod = db.execute("SELECT stock FROM products WHERE sku = ?", (sku,)).fetchone()
+            if prod:
+                if qty > (prod["stock"] or 0):
+                    qty = prod["stock"]
+                    flash(f"Quantity adjusted to available stock for {sku}.", "warning")
+            cart[sku] = qty
+    _cart_set(cart)
+    return redirect(url_for("cart_view"))
+
+# -- Checkout ----------------------------------------------------
+@app.route("/checkout", methods=["GET", "POST"])
+def checkout():
+    cart = _cart_get()
+    if not cart:
+        flash("Your cart is empty.", "warning")
+        return redirect(url_for("products"))
+
+    db = get_db()
+    # build items list from DB and calculate total
+    placeholders = ",".join("?" for _ in cart.keys())
+    rows = db.execute(f"SELECT id, sku, name, price, stock FROM products WHERE sku IN ({placeholders})", tuple(cart.keys())).fetchall()
+    prod_map = {r["sku"]: dict(r) for r in rows}
+    items = []
+    total = 0.0
+    for sku, qty in cart.items():
+        p = prod_map.get(sku)
+        if not p:
+            flash(f"Product {sku} not found, removed from cart.", "warning")
+            continue
+        subtotal = (p["price"] or 0.0) * qty
+        total += subtotal
+        items.append({"id": p["id"], "sku": sku, "name": p["name"], "price": p["price"], "qty": qty, "stock": p["stock"], "subtotal": subtotal})
+
+    if request.method == "GET":
+        return render_template("checkout.html", items=items, total=total)
+
+    # POST: process payment stub + create order
+    name = (request.form.get("name") or "Guest").strip()
+    email = (request.form.get("email") or "").strip().lower()
+    if not email:
+        flash("Please provide an email for the order.", "danger")
+        return redirect(url_for("checkout"))
+
+    try:
+        # begin transaction
+        db.execute("BEGIN")
+        # Re-check stock availability inside transaction
+        for it in items:
+            cur = db.execute("SELECT stock FROM products WHERE id = ?", (it["id"],)).fetchone()
+            if not cur or (cur["stock"] or 0) < it["qty"]:
+                raise ValueError(f"Insufficient stock for {it['name']}")
+
+        # find or create customer
+        cur = db.execute("SELECT id FROM customers WHERE email = ?", (email,)).fetchone()
+        if cur:
+            customer_id = cur["id"]
+            db.execute("UPDATE customers SET name = ? WHERE id = ?", (name, customer_id))
+        else:
+            created_at = datetime.utcnow().isoformat()
+            cur = db.execute("INSERT INTO customers (name, email, created_at) VALUES (?, ?, ?)", (name, email, created_at))
+            customer_id = cur.lastrowid
+
+        # insert order
+        created_at = datetime.utcnow().isoformat()
+        cur = db.execute("INSERT INTO orders (customer_id, total, status, created_at) VALUES (?, ?, ?, ?)",
+                         (customer_id, total, "placed", created_at))
+        order_id = cur.lastrowid
+
+        # insert items and decrement stock
+        for it in items:
+            db.execute("INSERT INTO order_items (order_id, product_id, quantity, unit_price) VALUES (?, ?, ?, ?)",
+                       (order_id, it["id"], it["qty"], it["price"]))
+            db.execute("UPDATE products SET stock = stock - ? WHERE id = ?", (it["qty"], it["id"]))
+
+        db.commit()
+        # clear cart
+        session.pop("cart", None)
+        flash("Order placed. Thank you!", "success")
+        return redirect(url_for("order_success", order_id=order_id))
+    except Exception as e:
+        db.rollback()
+        flash(str(e), "danger")
+        return redirect(url_for("cart_view"))
+
+# -- Order success page -----------------------------------------
+@app.route("/order/success/<int:order_id>")
+def order_success(order_id):
+    db = get_db()
+    order = db.execute("SELECT o.id, o.total, o.status, o.created_at, c.name, c.email FROM orders o LEFT JOIN customers c ON o.customer_id = c.id WHERE o.id = ?", (order_id,)).fetchone()
+    items = db.execute("SELECT oi.quantity, oi.unit_price, p.name FROM order_items oi JOIN products p ON oi.product_id = p.id WHERE oi.order_id = ?", (order_id,)).fetchall()
+    return render_template("order_success.html", order=order, items=items)

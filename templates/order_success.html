@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Order Success</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+  <div class="container py-4">
+    <h3>Order placed</h3>
+    <p>Order #{{ order.id }} — placed at {{ order.created_at }} — status: {{ order.status }}</p>
+    <h5>Items</h5>
+    <ul class="list-group mb-3">
+      {% for it in items %}
+      <li class="list-group-item d-flex justify-content-between">
+        <div>{{ it["name"] }} × {{ it["quantity"] }}</div>
+        <div>${{ "{:,.2f}".format(it["unit_price"] * it["quantity"]) }}</div>
+      </li>
+      {% endfor %}
+    </ul>
+    <a href="{{ url_for('products') }}" class="btn btn-primary">Continue shopping</a>
+  </div>
+</body>
+</html>

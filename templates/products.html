@@ -63,7 +63,15 @@
                 <div class="price">${{ "{:,.0f}".format(p.price) }}</div>
                 <div class="small text-muted">In stock: {{ p.stock }}</div>
               </div>
-              <a class="btn btn-mil" href="#">Enquire</a>
+
+              <div>
+                <form method="post" action="{{ url_for('cart_add') }}" class="d-inline-block me-2">
+                  <input type="hidden" name="sku" value="{{ p.sku }}">
+                  <input type="hidden" name="qty" value="1">
+                  <button class="btn btn-mil" type="submit" {% if p.stock <= 0 %}disabled{% endif %}>Add to cart</button>
+                </form>
+                <a class="btn btn-outline-secondary" href="#">Enquire</a>
+              </div>
             </div>
           </div>
         </div>
@@ -128,7 +136,15 @@
                   <div class="price">${{ "{:,.0f}".format(p.price) }}</div>
                   <div class="small text-muted">In stock: {{ p.stock }}</div>
                 </div>
-                <a class="btn btn-mil" href="#">Enquire</a>
+
+                <div>
+                  <form method="post" action="{{ url_for('cart_add') }}" class="d-inline-block me-2">
+                    <input type="hidden" name="sku" value="{{ p.sku }}">
+                    <input type="hidden" name="qty" value="1">
+                    <button class="btn btn-mil" type="submit" {% if p.stock <= 0 %}disabled{% endif %}>Add to cart</button>
+                  </form>
+                  <a class="btn btn-outline-secondary" href="#">Enquire</a>
+                </div>
               </div>
             </div>
           </div>
