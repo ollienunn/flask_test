@@ -6,8 +6,6 @@ import re
 from werkzeug.utils import secure_filename
 import os
 from functools import wraps
-from flask import session, flash
-from flask import Markup  # small helper if needed for flashes
 
 app = Flask(__name__)
 DB_PATH = Path(__file__).parent / "store.db"
@@ -391,3 +389,12 @@ def order_success(order_id):
     order = db.execute("SELECT o.id, o.total, o.status, o.created_at, c.name, c.email FROM orders o LEFT JOIN customers c ON o.customer_id = c.id WHERE o.id = ?", (order_id,)).fetchone()
     items = db.execute("SELECT oi.quantity, oi.unit_price, p.name FROM order_items oi JOIN products p ON oi.product_id = p.id WHERE oi.order_id = ?", (order_id,)).fetchall()
     return render_template("order_success.html", order=order, items=items)
+
+@app.route("/product/<sku>")
+def product_detail(sku):
+    db = get_db()
+    sku_upper = sku.upper()
+    p = db.execute("SELECT id, sku, name, description, price, image, stock FROM products WHERE sku = ?", (sku_upper,)).fetchone()
+    if not p:
+        return redirect(url_for("products"))
+    return render_template("product_detail.html", product=dict(p))
