@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
 <body>
+  {% include 'navbar.html' %}
   <div class="container py-4">
     {% if request.args.get('error') == 'in_use' %}
       <div class="alert alert-warning">Cannot delete product — it is referenced by existing orders.</div>

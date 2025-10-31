@@ -398,3 +398,6 @@ def product_detail(sku):
     if not p:
         return redirect(url_for("products"))
     return render_template("product_detail.html", product=dict(p))
+
+if __name__ == "__main__":
+    app.run(debug=True)
