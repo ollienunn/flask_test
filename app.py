@@ -23,7 +23,7 @@ def close_db(exc):
 
 def get_products(limit=None):
     db = get_db()
-    sql = "SELECT id, sku, name, description, price, image FROM products ORDER BY id"
+    sql = "SELECT id, sku, name, description, price, image, stock FROM products ORDER BY id"
     cur = db.execute(sql) if not limit else db.execute(sql + " LIMIT ?", (limit,))
     return [dict(r) for r in cur.fetchall()]
 
@@ -58,6 +58,12 @@ def admin_products():
         except ValueError:
             price_val = None
 
+        stock_raw = (request.form.get("stock") or "").strip()
+        try:
+            stock_val = int(stock_raw) if stock_raw != "" else None
+        except ValueError:
+            stock_val = None
+
         image_file = request.files.get("image")
         image_path = None
         if image_file and image_file.filename:
@@ -77,6 +83,8 @@ def admin_products():
             set_parts.append("description = ?"); params.append(description)
         if price_val is not None:
             set_parts.append("price = ?"); params.append(price_val)
+        if stock_val is not None:
+            set_parts.append("stock = ?"); params.append(stock_val)
         if image_path:
             set_parts.append("image = ?"); params.append(image_path)
 
@@ -143,9 +151,14 @@ def admin_add_product():
     created_at = datetime.utcnow().isoformat()
 
     try:
+        stock_val = int(request.form.get("stock") or 0)
+    except Exception:
+        stock_val = 0
+
+    try:
         db.execute(
-            "INSERT INTO products (sku, name, description, price, image, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-            (sku, name, description, price_val, image_path, created_at)
+            "INSERT INTO products (sku, name, description, price, image, stock, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (sku, name, description, price_val, image_path, stock_val, created_at)
         )
         db.commit()
     except Exception:

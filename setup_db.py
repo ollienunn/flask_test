@@ -6,11 +6,11 @@ from datetime import datetime
 DB_PATH = Path(__file__).parent / "store.db"
 
 PRODUCTS = [
-    ("F35",   "F-35 Lightning II", "Stealth multirole fighter with advanced sensor fusion.", 250_000_000.0, "images/f35.gif"),
-    ("FA18",  "F/A-18 Hornet", "Carrier-capable multirole combat aircraft.", 185_000_000.0, "images/F18-Super-Hornet.png"),
-    ("GROWLER","EA-18G Growler", "Electronic attack variant for suppression of enemy air defenses.", 195_000_000.0, "images/growler.webp"),
-    ("B2",    "B-2 Spirit", "Stealth strategic bomber with flying-wing design.", 2_000_000_000.0, "images/b2.png"),
-    ("AC130", "AC-130 Spectre", "A massive plane that provides close air support and precision firepower to ensure operational success.", 200_000_000.0, "images/ac-130a.webp"),
+    ("F35",   "F-35 Lightning II", "Stealth multirole fighter with advanced sensor fusion.", 250_000_000.0, "images/f35.gif", 2),
+    ("FA18",  "F/A-18 Hornet", "Carrier-capable multirole combat aircraft.", 185_000_000.0, "images/F18-Super-Hornet.png", 3),
+    ("GROWLER","EA-18G Growler", "Electronic attack variant for suppression of enemy air defenses.", 195_000_000.0, "images/growler.webp", 2),
+    ("B2",    "B-2 Spirit", "Stealth strategic bomber with flying-wing design.", 2_000_000_000.0, "images/b2.png", 1),
+    ("AC130", "AC-130 Spectre", "A massive plane that provides close air support and precision firepower.", 200_000_000.0, "images/ac-130a.webp", 1),
 ]
 
 SCHEMA = """
@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS products (
     description TEXT,
     price REAL NOT NULL,
     image TEXT,
+    stock INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL
 );
 
@@ -63,27 +64,27 @@ CREATE TABLE IF NOT EXISTS donations (
 );
 """
 
-def recreate_db():
-    if DB_PATH.exists():
-        DB_PATH.unlink()
-        print(f"Deleted existing DB: {DB_PATH}")
-    else:
-        print(f"No existing DB to delete at: {DB_PATH}")
+def ensure_stock_column(conn):
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(products)").fetchall()]
+    if "stock" not in cols:
+        conn.execute("ALTER TABLE products ADD COLUMN stock INTEGER NOT NULL DEFAULT 0")
 
 def create_schema_and_seed(conn):
     now = datetime.utcnow().isoformat()
     conn.executescript(SCHEMA)
-    # upsert products so running script multiple times keeps DB consistent
-    for sku, name, desc, price, img in PRODUCTS:
+    ensure_stock_column(conn)
+    # upsert products (keep DB consistent on re-run)
+    for sku, name, desc, price, img, stock in PRODUCTS:
         conn.execute("""
-            INSERT INTO products (sku, name, description, price, image, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO products (sku, name, description, price, image, stock, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(sku) DO UPDATE SET
               name=excluded.name,
               description=excluded.description,
               price=excluded.price,
-              image=excluded.image
-        """, (sku, name, desc, price, img, now))
+              image=excluded.image,
+              stock=excluded.stock
+        """, (sku, name, desc, price, img, stock, now))
 
 def summary(conn):
     cur = conn.execute("SELECT COUNT(*) FROM products"); print("products:", cur.fetchone()[0])

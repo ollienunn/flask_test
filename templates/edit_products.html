@@ -34,6 +34,10 @@
           <label class="form-label small">Price</label>
           <input name="price" class="form-control" placeholder="0.00">
         </div>
+        <div class="col-md-2">
+          <label class="form-label small">Stock</label>
+          <input name="stock" type="number" min="0" class="form-control" value="1">
+        </div>
         <div class="col-md-4">
           <label class="form-label small">Photo</label>
           <input type="file" name="image" accept="image/*" class="form-control">
@@ -55,8 +59,7 @@
         {% for p in products %}
         <div class="col-12">
           <div class="card p-3">
-            <form method="post" enctype="multipart/form-data" class="row g-2 align-items-center">
-              <input type="hidden" name="sku" value="{{ p.sku }}">
+            <div class="row g-2 align-items-center">
               <div class="col-md-3">
                 <div style="max-width:320px;">
                   <img src="{{ url_for('static', filename=p.image) }}" alt="{{ p.name }}" class="img-fluid border rounded">
@@ -64,43 +67,51 @@
               </div>
 
               <div class="col-md-7">
-                <div class="mb-2">
-                  <label class="form-label small">Name</label>
-                  <input name="name" class="form-control" value="{{ p.name }}">
-                </div>
+                <!-- UPDATE form (only for updating fields) -->
+                <form method="post" enctype="multipart/form-data" action="{{ url_for('admin_products') }}" class="row g-2">
+                  <input type="hidden" name="sku" value="{{ p.sku }}">
 
-                <div class="mb-2">
-                  <label class="form-label small">Price</label>
-                  <input name="price" class="form-control" value="{{ "{:.2f}".format(p.price) }}">
-                </div>
+                  <div class="col-12 mb-2">
+                    <label class="form-label small">Name</label>
+                    <input name="name" class="form-control" value="{{ p.name }}">
+                  </div>
 
-                <div class="mb-2">
-                  <label class="form-label small">Description</label>
-                  <textarea name="description" class="form-control" rows="2">{{ p.description }}</textarea>
-                </div>
+                  <div class="col-md-6 mb-2">
+                    <label class="form-label small">Price</label>
+                    <input name="price" class="form-control" value="{{ "{:.2f}".format(p.price) }}">
+                  </div>
+                  <div class="col-md-6 mb-2">
+                    <label class="form-label small">Stock</label>
+                    <input name="stock" type="number" min="0" class="form-control" value="{{ p.stock }}">
+                  </div>
 
-                <div class="mb-2">
-                  <label class="form-label small">Replace photo</label>
-                  <input type="file" name="image" accept="image/*" class="form-control">
-                  <div class="form-text">Uploading a new image will replace the current one (saved to static/images).</div>
-                </div>
+                  <div class="col-12 mb-2">
+                    <label class="form-label small">Description</label>
+                    <textarea name="description" class="form-control" rows="2">{{ p.description }}</textarea>
+                  </div>
+
+                  <div class="col-12 mb-2">
+                    <label class="form-label small">Replace photo</label>
+                    <input type="file" name="image" accept="image/*" class="form-control">
+                    <div class="form-text">Uploading a new image will replace the current one (saved to static/images).</div>
+                  </div>
+
+                  <div class="col-12 text-end">
+                    <button type="submit" class="btn btn-primary">Save</button>
+                  </div>
+                </form>
               </div>
 
               <div class="col-md-2 d-flex flex-column gap-2">
-                <div>
-                  <button type="submit" formaction="{{ url_for('admin_products') }}" class="btn btn-primary w-100">Save</button>
-                </div>
-                <div>
-                  <a href="{{ url_for('products') }}" class="btn btn-outline-secondary w-100">View Products</a>
-                </div>
-                <div>
-                  <form method="post" action="{{ url_for('admin_delete_product') }}" onsubmit="return confirm('Delete this product? This cannot be undone.');">
-                    <input type="hidden" name="sku" value="{{ p.sku }}">
-                    <button type="submit" class="btn btn-danger w-100">Delete</button>
-                  </form>
-                </div>
+                <!-- DELETE form (separate, not nested) -->
+                <form method="post" action="{{ url_for('admin_delete_product') }}" onsubmit="return confirm('Delete this product? This cannot be undone.');">
+                  <input type="hidden" name="sku" value="{{ p.sku }}">
+                  <button type="submit" class="btn btn-danger w-100">Delete</button>
+                </form>
+
+                <a href="{{ url_for('products') }}" class="btn btn-outline-secondary w-100">View Products</a>
               </div>
-            </form>
+            </div>
           </div>
         </div>
         {% endfor %}
