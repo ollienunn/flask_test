@@ -53,12 +53,11 @@ def admin_products():
         name = (request.form.get("name") or "").strip()
         description = (request.form.get("description") or "").strip()
         price_raw = (request.form.get("price") or "").replace(",", "").strip()
+        stock_raw = (request.form.get("stock") or "").strip()
         try:
             price_val = float(price_raw) if price_raw != "" else None
         except ValueError:
             price_val = None
-
-        stock_raw = (request.form.get("stock") or "").strip()
         try:
             stock_val = int(stock_raw) if stock_raw != "" else None
         except ValueError:
@@ -118,6 +117,7 @@ def _unique_sku(db, base):
         sku = f"{base[:24]}-{suffix}"
         suffix += 1
 
+# admin add product: accept stock
 @app.route("/admin/products/add", methods=["POST"])
 def admin_add_product():
     db = get_db()
@@ -125,12 +125,16 @@ def admin_add_product():
     sku = (request.form.get("sku") or "").strip().upper()
     description = (request.form.get("description") or "").strip()
     price_raw = (request.form.get("price") or "").replace(",", "").strip()
+    stock_raw = (request.form.get("stock") or "").strip()
     try:
         price_val = float(price_raw) if price_raw != "" else 0.0
     except ValueError:
         price_val = 0.0
+    try:
+        stock_val = int(stock_raw) if stock_raw != "" else 0
+    except ValueError:
+        stock_val = 0
 
-    # image upload
     image_file = request.files.get("image")
     image_path = None
     if image_file and image_file.filename:
@@ -141,7 +145,6 @@ def admin_add_product():
         image_file.save(str(dest))
         image_path = f"images/{filename}"
 
-    # generate SKU if missing and ensure uniqueness
     if not sku:
         base = _make_sku_candidate(name)
         sku = _unique_sku(db, base)
@@ -149,12 +152,6 @@ def admin_add_product():
         sku = _unique_sku(db, sku.upper())
 
     created_at = datetime.utcnow().isoformat()
-
-    try:
-        stock_val = int(request.form.get("stock") or 0)
-    except Exception:
-        stock_val = 0
-
     try:
         db.execute(
             "INSERT INTO products (sku, name, description, price, image, stock, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",

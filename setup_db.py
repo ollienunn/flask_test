@@ -65,15 +65,17 @@ CREATE TABLE IF NOT EXISTS donations (
 """
 
 def ensure_stock_column(conn):
-    cols = [r[1] for r in conn.execute("PRAGMA table_info(products)").fetchall()]
-    if "stock" not in cols:
-        conn.execute("ALTER TABLE products ADD COLUMN stock INTEGER NOT NULL DEFAULT 0")
+    cur = conn.execute("PRAGMA table_info(products)").fetchall()
+    cols = [r[1] for r in cur]
+    if 'stock' not in cols:
+        conn.execute("ALTER TABLE products ADD COLUMN stock INTEGER NOT NULL DEFAULT 0;")
+        print("Added 'stock' column to products table")
 
 def create_schema_and_seed(conn):
     now = datetime.utcnow().isoformat()
     conn.executescript(SCHEMA)
     ensure_stock_column(conn)
-    # upsert products (keep DB consistent on re-run)
+    # upsert products (keep stock from PRODUCTS)
     for sku, name, desc, price, img, stock in PRODUCTS:
         conn.execute("""
             INSERT INTO products (sku, name, description, price, image, stock, created_at)
@@ -98,8 +100,9 @@ def main():
     p.add_argument("--force", action="store_true", help="Delete existing DB and recreate")
     args = p.parse_args()
 
-    if args.force:
-        recreate_db()
+    if args.force and DB_PATH.exists():
+        DB_PATH.unlink()
+        print(f"Deleted existing DB: {DB_PATH}")
 
     created = not DB_PATH.exists()
     conn = sqlite3.connect(DB_PATH)
