@@ -9,30 +9,8 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
   <script src="{{ url_for('static', filename='js/transition.js') }}" defer></script>
 </head>
-<body class="bg-light text-dark">
-  {% include 'navbar.html' %}
-  <!-- Navbar -->
-  <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom shadow-sm">
-    <div class="container">
-      <a class="navbar-brand fw-bold d-flex align-items-center" href="{{ url_for('index') }}">
-        <img src="{{ url_for('static', filename='images/Logo.png') }}" alt="Logo" class="nav-logo me-2">
-        Webstore
-      </a>
-
-      <div class="ms-3">
-        {% if session.get('is_admin') %}
-          <a href="{{ url_for('admin_products') }}" class="btn btn-sm btn-outline-dark me-2">Admin</a>
-          <a href="{{ url_for('logout') }}" class="btn btn-sm btn-outline-secondary me-2">Logout</a>
-        {% else %}
-          <a href="{{ url_for('login') }}" class="btn btn-sm btn-outline-primary me-2">Admin login</a>
-        {% endif %}
-      </div>
-
-      <div class="ms-auto d-flex align-items-center">
-        <a href="{{ url_for('cart_view') }}" class="btn btn-sm btn-outline-success">View cart</a>
-      </div>
-    </div>
-  </nav>
+<body>
+  {% include 'header.html' %}
  
   <!-- Main content -->
   <main class="container py-5">
@@ -66,28 +44,4 @@
         {% endfor %}
       </div>
     </section>
-   </main>
- 
-   <!-- Footer -->
-   <footer>
-     <div class="container">
-       &copy; {{ 2025 }} Webstore — MachZero. All rights reserved.
-     </div>
-   </footer>
- 
-  <script>
-    // smooth page-out transition when clicking an Enquire link
-    document.addEventListener('DOMContentLoaded', function () {
-      document.querySelectorAll('a.enquire-link').forEach(function (a) {
-        a.addEventListener('click', function (e) {
-          // allow modifier keys to open in new tab
-          if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-          e.preventDefault();
-          document.body.classList.add('page-out');
-          setTimeout(function () { window.location = a.href; }, 320);
-        }, {passive: true});
-      });
-    });
-  </script>
- </body>
- </html>
+    

@@ -9,8 +9,7 @@
 </head>
 <body>
   {% include 'navbar.html' %}
-
-  <div class="container py-4">
+  <main class="container py-5">
     <div class="row g-3">
       <div class="col-md-6">
         <img src="{{ url_for('static', filename=product.image) }}" alt="{{ product.name }}" class="img-fluid border rounded">
@@ -37,6 +36,6 @@
         </form>
       </div>
     </div>
-  </div>
+  </main>
 </body>
 </html>

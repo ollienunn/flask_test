@@ -399,5 +399,15 @@ def product_detail(sku):
         return redirect(url_for("products"))
     return render_template("product_detail.html", product=dict(p))
 
+# inject cart count into all templates
+@app.context_processor
+def inject_cart_count():
+    cart = session.get("cart", {}) if session is not None else {}
+    try:
+        count = sum(int(v) for v in cart.values()) if cart else 0
+    except Exception:
+        count = 0
+    return {"cart_count": count}
+
 if __name__ == "__main__":
     app.run(debug=True)
