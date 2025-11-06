@@ -49,13 +49,15 @@
               </div>
 
               <div>
-                <form method="post" action="{{ url_for('cart_add') }}" class="d-inline-block me-2">
+                <!-- Add to cart form -->
+                <!-- <form method="post" action="{{ url_for('cart_add') }}" class="d-inline-block me-2">
                   <input type="hidden" name="sku" value="{{ p.sku }}">
                   <input type="hidden" name="qty" value="1">
                   <button class="btn btn-mil" type="submit" {% if p.stock <= 0 %}disabled{% endif %}>Add to cart</button>
-                </form>
-
-                <a class="btn btn-outline-secondary" href="{{ url_for('product_detail', sku=p.sku) }}">Enquire</a>
+                </form> -->
+                
+                <!-- Enquire now goes to the product detail page (works for B2 and AC130) -->
+                <a class="btn btn-mil" href="{{ url_for('product_detail', sku=p.sku) }}" data-product="{{ p.sku|lower }}">Enquire</a>
               </div>
             </div>
           </div>
@@ -79,7 +81,7 @@
               <div class="price">${{ "{:,.0f}".format(ns.b2.price) }}</div>
               <div class="small text-muted">In stock: {{ ns.b2.stock }}</div>
             </div>
-            <a class="btn btn-mil" href="#">Enquire</a>
+            <a class="btn btn-mil" href="{{ url_for('product_detail', sku=ns.b2.sku) }}" data-product="{{ ns.b2.sku|lower }}">Enquire</a>
           </div>
         </div>
       </div>
@@ -99,7 +101,7 @@
               <div class="price">${{ "{:,.0f}".format(ns.ac130.price) }}</div>
               <div class="small text-muted">In stock: {{ ns.ac130.stock }}</div>
             </div>
-            <a class="btn btn-mil" href="#">Enquire</a>
+            <a class="btn btn-mil" href="{{ url_for('product_detail', sku=ns.ac130.sku) }}" data-product="{{ ns.ac130.sku|lower }}">Enquire</a>
           </div>
         </div>
       </div>
@@ -129,7 +131,8 @@
                     <button class="btn btn-mil" type="submit" {% if p.stock <= 0 %}disabled{% endif %}>Add to cart</button>
                   </form>
 
-                  <a class="btn btn-outline-secondary" href="{{ url_for('product_detail', sku=p.sku) }}">Enquire</a>
+                  <!-- Enquire now goes to the product detail page (works for B2 and AC130) -->
+                  <a class="btn btn-outline-secondary enquire-link" href="{{ url_for('product_detail', sku=p.sku) }}" data-product="{{ p.sku|lower }}">Enquire</a>
                 </div>
               </div>
             </div>

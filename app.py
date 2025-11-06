@@ -6,6 +6,7 @@ import re
 from werkzeug.utils import secure_filename
 import os
 from functools import wraps
+from flask import send_from_directory, abort
 
 app = Flask(__name__)
 DB_PATH = Path(__file__).parent / "store.db"
@@ -207,7 +208,7 @@ def login():
         username = (request.form.get("username") or "").strip()
         password = (request.form.get("password") or "").strip()
         ADMIN_USER = os.environ.get("ADMIN_USER", "Admin")
-        ADMIN_PASS = os.environ.get("ADMIN_PASS", "MachZeroOwner")
+        ADMIN_PASS = os.environ.get("ADMIN_PASS", "MachZero")
         if username == ADMIN_USER and password == ADMIN_PASS:
             session["is_admin"] = True
             next_url = request.args.get("next") or url_for("admin_products")
@@ -308,15 +309,53 @@ def cart_update():
     return redirect(url_for("cart_view"))
 
 # -- Checkout ----------------------------------------------------
+def _ensure_order_columns(conn):
+    """
+    Add government-specific columns to orders table if they don't exist.
+    Safe to run multiple times.
+    """
+    cols = { r["name"] for r in conn.execute("PRAGMA table_info(orders)").fetchall() }
+    additions = {
+        "agency": "TEXT",
+        "authorized_officer": "TEXT",
+        "official_email": "TEXT",
+        "position_clearance": "TEXT",
+        "contact_number": "TEXT",
+        "po_number": "TEXT",
+        "contract_reference": "TEXT",
+        "funding_source": "TEXT",
+        "auth_doc": "TEXT",
+        "vendor_id": "TEXT",
+        "end_user_cert": "TEXT",
+        "export_license_status": "TEXT",
+        "delivery_location": "TEXT",
+        "required_delivery_date": "TEXT",
+        "payment_method": "TEXT",
+        "declaration_agreed": "INTEGER",
+        "digital_signature": "TEXT"
+    }
+    for name, sqltype in additions.items():
+        if name not in cols:
+            conn.execute(f"ALTER TABLE orders ADD COLUMN {name} {sqltype};")
+
+# remove @app.before_first_request decorator usage and instead run once at startup
+def _ensure_schema_startup():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        _ensure_order_columns(conn)
+        conn.commit()
+    finally:
+        conn.close()
+
 @app.route("/checkout", methods=["GET", "POST"])
 def checkout():
-    cart = _cart_get()
+    cart = session.get("cart", {}) or {}
     if not cart:
         flash("Your cart is empty.", "warning")
         return redirect(url_for("products"))
 
     db = get_db()
-    # build items list from DB and calculate total
     placeholders = ",".join("?" for _ in cart.keys())
     rows = db.execute(f"SELECT id, sku, name, price, stock FROM products WHERE sku IN ({placeholders})", tuple(cart.keys())).fetchall()
     prod_map = {r["sku"]: dict(r) for r in rows}
@@ -334,15 +373,81 @@ def checkout():
     if request.method == "GET":
         return render_template("checkout.html", items=items, total=total)
 
-    # POST: process payment stub + create order
-    name = (request.form.get("name") or "Guest").strip()
-    email = (request.form.get("email") or "").strip().lower()
-    if not email:
-        flash("Please provide an email for the order.", "danger")
+    # POST: collect gov fields and files
+    # Required: official_email and declaration checkbox
+    agency = (request.form.get("agency") or "").strip()
+    authorized_officer = (request.form.get("authorized_officer") or "").strip()
+    official_email = (request.form.get("official_email") or "").strip()
+    position_clearance = (request.form.get("position_clearance") or "").strip()
+    contact_number = (request.form.get("contact_number") or "").strip()
+
+    po_number = (request.form.get("po_number") or "").strip()
+    contract_reference = (request.form.get("contract_reference") or "").strip()
+    funding_source = (request.form.get("funding_source") or "").strip()
+
+    vendor_id = (request.form.get("vendor_id") or "").strip()
+    export_license_status = (request.form.get("export_license_status") or "").strip()
+    delivery_location = (request.form.get("delivery_location") or "").strip()
+    required_delivery_date = (request.form.get("required_delivery_date") or "").strip()
+    payment_method = (request.form.get("payment_method") or "").strip()
+
+    declaration = request.form.get("declaration") == "on"
+
+    if not official_email:
+        flash("Official email is required.", "danger")
+        return redirect(url_for("checkout"))
+    if not declaration:
+        flash("You must confirm you are an authorized government representative.", "danger")
         return redirect(url_for("checkout"))
 
+    # Require official government email domain
+    if not is_official_email(official_email):
+        flash("Official government email required (e.g. name@domain.gov).", "danger")
+        return redirect(url_for("checkout"))
+
+    # Allowed extensions and size limit
+    ALLOWED_DOC_EXT = {".pdf", ".png", ".jpg", ".jpeg"}
+    MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5 MB
+
+    def _save_file_private_valid(field_name, allowed_exts=ALLOWED_DOC_EXT, max_bytes=MAX_UPLOAD_BYTES):
+        f = request.files.get(field_name)
+        if f and f.filename:
+            filename = secure_filename(f.filename)
+            ext = Path(filename).suffix.lower()
+            if ext not in allowed_exts:
+                raise ValueError(f"Invalid file type for {field_name}. Allowed: {', '.join(sorted(allowed_exts))}")
+            # check size
+            f.stream.seek(0, os.SEEK_END)
+            size = f.stream.tell()
+            f.stream.seek(0)
+            if size > max_bytes:
+                raise ValueError(f"File too large for {field_name} (max {max_bytes} bytes)")
+            dest_name = f"{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{filename}"
+            dest = PRIVATE_UPLOADS / dest_name
+            f.save(str(dest))
+            # store filename only (private storage)
+            return dest.name
+        return None
+
     try:
-        # begin transaction
+        auth_doc_name = _save_file_private_valid("auth_doc")
+        end_user_cert_name = _save_file_private_valid("end_user_cert")
+        digital_sig_name = _save_file_private_valid("digital_signature")
+    except ValueError as ve:
+        flash(str(ve), "danger")
+        return redirect(url_for("checkout"))
+
+    # enforce required compliance docs
+    if not auth_doc_name or not end_user_cert_name:
+        flash("Authorization document and End-User certificate are required.", "danger")
+        return redirect(url_for("checkout"))
+
+    # use the private filenames when inserting into orders
+    auth_doc_path = auth_doc_name
+    end_user_cert_path = end_user_cert_name
+    digital_sig_path = digital_sig_name
+
+    try:
         db.execute("BEGIN")
         # Re-check stock availability inside transaction
         for it in items:
@@ -350,20 +455,34 @@ def checkout():
             if not cur or (cur["stock"] or 0) < it["qty"]:
                 raise ValueError(f"Insufficient stock for {it['name']}")
 
-        # find or create customer
-        cur = db.execute("SELECT id FROM customers WHERE email = ?", (email,)).fetchone()
+        # find or create customer by official_email
+        cur = db.execute("SELECT id FROM customers WHERE email = ?", (official_email,)).fetchone()
         if cur:
             customer_id = cur["id"]
-            db.execute("UPDATE customers SET name = ? WHERE id = ?", (name, customer_id))
+            db.execute("UPDATE customers SET name = ? WHERE id = ?", (authorized_officer, customer_id))
         else:
             created_at = datetime.utcnow().isoformat()
-            cur = db.execute("INSERT INTO customers (name, email, created_at) VALUES (?, ?, ?)", (name, email, created_at))
+            cur = db.execute("INSERT INTO customers (name, email, created_at) VALUES (?, ?, ?)", (authorized_officer, official_email, created_at))
             customer_id = cur.lastrowid
 
-        # insert order
+        # prepare order insert with government fields
         created_at = datetime.utcnow().isoformat()
-        cur = db.execute("INSERT INTO orders (customer_id, total, status, created_at) VALUES (?, ?, ?, ?)",
-                         (customer_id, total, "placed", created_at))
+        order_cols = ["customer_id", "total", "status", "created_at",
+                      "agency", "authorized_officer", "official_email", "position_clearance", "contact_number",
+                      "po_number", "contract_reference", "funding_source",
+                      "auth_doc", "vendor_id", "end_user_cert", "export_license_status",
+                      "delivery_location", "required_delivery_date", "payment_method",
+                      "declaration_agreed", "digital_signature"]
+        order_vals = [customer_id, total, "placed", created_at,
+                      agency, authorized_officer, official_email, position_clearance, contact_number,
+                      po_number, contract_reference, funding_source,
+                      auth_doc_path, vendor_id, end_user_cert_path, export_license_status,
+                      delivery_location, required_delivery_date, payment_method,
+                      int(declaration), digital_sig_path]
+
+        placeholders = ",".join("?" for _ in order_cols)
+        sql = f"INSERT INTO orders ({','.join(order_cols)}) VALUES ({placeholders})"
+        cur = db.execute(sql, tuple(order_vals))
         order_id = cur.lastrowid
 
         # insert items and decrement stock
@@ -373,7 +492,6 @@ def checkout():
             db.execute("UPDATE products SET stock = stock - ? WHERE id = ?", (it["qty"], it["id"]))
 
         db.commit()
-        # clear cart
         session.pop("cart", None)
         flash("Order placed. Thank you!", "success")
         return redirect(url_for("order_success", order_id=order_id))
@@ -409,5 +527,43 @@ def inject_cart_count():
         count = 0
     return {"cart_count": count}
 
+# Save uploads to a private folder (not served by static)
+PRIVATE_UPLOADS = Path(__file__).parent / "private_uploads"
+PRIVATE_UPLOADS.mkdir(parents=True, exist_ok=True)
+
+def _save_file_private(field_name):
+    f = request.files.get(field_name)
+    if f and f.filename:
+        filename = secure_filename(f.filename)
+        dest = PRIVATE_UPLOADS / f"{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{filename}"
+        f.save(str(dest))
+        return dest.name
+    return None
+
+# Example simple domain whitelist check (server-side)
+ALLOWED_GOV_DOMAINS = (".gov", ".gov.au", ".mil")
+def is_official_email(email: str) -> bool:
+    email = (email or "").strip().lower()
+    return any(email.endswith(d) for d in ALLOWED_GOV_DOMAINS)
+
+# In your checkout POST processing (replace save to static with _save_file_private and validate):
+# auth_doc_name = _save_file_private("auth_doc")
+# end_user_name = _save_file_private("end_user_cert")
+# ...
+# if not is_official_email(official_email):
+#     flash("Official government email required (e.g. name@domain.gov).", "danger")
+#     return redirect(url_for("checkout"))
+
+# Admin-only download route for private files
+@app.route("/admin/uploads/<filename>")
+@login_required
+def admin_download_upload(filename):
+    try:
+        return send_from_directory(str(PRIVATE_UPLOADS), filename, as_attachment=True)
+    except FileNotFoundError:
+        abort(404)
+
 if __name__ == "__main__":
+    # ensure DB schema has the required order columns before serving
+    _ensure_schema_startup()
     app.run(debug=True)

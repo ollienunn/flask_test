@@ -29,7 +29,7 @@
     </section>
 
     <section>
-      <h3 class="mb-3">Featured</h3>
+      <h3 class="mb-3">Featuring</h3>
       <div class="product-grid">
         {% for p in featured %}
         <div id="product-{{ p.sku|lower }}" class="card-mil {% if p.sku|lower == request.args.get('selected') %}gif-card{% endif %}">
@@ -44,3 +44,31 @@
         {% endfor %}
       </div>
     </section>
+  </main>
+
+<!-- Footer -->
+<footer>
+  <div class="container">
+    &copy; {{ 2025 }} Webstore — MachZero.
+  </div>
+</footer>
+
+<script>
+  // read ?selected=... and highlight + scroll that product into view
+  document.addEventListener('DOMContentLoaded', function () {
+    const params = new URLSearchParams(window.location.search);
+    const selected = params.get('selected');
+    if (!selected) return;
+    const el = document.getElementById('product-' + selected);
+    if (!el) return;
+    // small delay so page renders then perform smooth scroll + highlight
+    setTimeout(function () {
+      el.classList.add('product-highlight');
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // ensure pronounced focus for keyboard users
+      el.setAttribute('tabindex', '-1');
+      el.focus({ preventScroll: true });
+    }, 180);
+  });
+</script>
+</html>
