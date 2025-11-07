@@ -1,95 +1,164 @@
 {% include 'navbar.html' %}
 <main class="container py-4">
-  <a class="btn btn-sm btn-outline-secondary mb-3" href="{{ url_for('admin_orders') }}">&larr; Back to orders</a>
-
-  <h4>Order #{{ order.id }} — {{ order.created_at }}</h4>
-  <div class="row g-3 mb-3">
-    <div class="col-md-6">
-      <strong>Customer</strong><br>{{ order.customer_name }} &lt;{{ order.customer_email }}&gt;
+  <div class="d-flex justify-content-between align-items-start mb-3">
+    <div>
+      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('admin_orders') }}">&larr; Back to orders</a>
+      <h4 class="d-inline-block ms-3 fw-bold">Order #{{ order.id }}</h4>
     </div>
-    <div class="col-md-6 text-end">
-      <strong>Total</strong><br>${{ "{:,.2f}".format(order.total) }}
-    </div>
-
-    <div class="col-12">
-      <h5>Government / Procurement Details</h5>
-      <dl class="row">
-        <dt class="col-sm-3">Agency</dt><dd class="col-sm-9">{{ order.agency }}</dd>
-        <dt class="col-sm-3">Authorized officer</dt><dd class="col-sm-9">{{ order.authorized_officer }}</dd>
-        <dt class="col-sm-3">Official email</dt><dd class="col-sm-9">{{ order.official_email }}</dd>
-        <dt class="col-sm-3">PO / Contract</dt><dd class="col-sm-9">{{ order.po_number }} / {{ order.contract_reference }}</dd>
-        <dt class="col-sm-3">Vendor ID</dt><dd class="col-sm-9">{{ order.vendor_id }}</dd>
-        <dt class="col-sm-3">Delivery</dt><dd class="col-sm-9">{{ order.delivery_location }} ({{ order.required_delivery_date }})</dd>
-        <dt class="col-sm-3">Declaration</dt><dd class="col-sm-9">{{ 'Yes' if order.declaration_agreed else 'No' }}</dd>
-      </dl>
-    </div>
-
-    <div class="col-12">
-      <h5>Uploaded documents (admin only)</h5>
-      <ul class="list-group">
-        {% if order.auth_doc %}
-          <li class="list-group-item">
-            Authorization doc:
-            <a href="{{ url_for('admin_download_upload', filename=order.auth_doc) }}">Download</a>
-          </li>
+    <div class="text-end">
+      <div class="small text-muted">Placed: {{ order.created_at }}</div>
+      <div class="h5 mt-1 text-primary fw-semibold">${{ "{:,.2f}".format(order.total) }}</div>
+      <div class="mt-2">
+        {# order status badge #}
+        {% set s = order.status or '' %}
+        {% if s == 'placed' %}
+          <span class="badge bg-primary text-uppercase small">{{ s }}</span>
+        {% elif s == 'processing' %}
+          <span class="badge bg-info text-dark text-uppercase small">{{ s }}</span>
+        {% elif s == 'shipped' %}
+          <span class="badge bg-secondary text-uppercase small">{{ s }}</span>
+        {% elif s == 'completed' %}
+          <span class="badge bg-success text-uppercase small">{{ s }}</span>
+        {% elif s == 'cancelled' %}
+          <span class="badge bg-danger text-uppercase small">{{ s }}</span>
+        {% else %}
+          <span class="badge bg-secondary text-uppercase small">{{ s }}</span>
         {% endif %}
-        {% if order.end_user_cert %}
-          <li class="list-group-item">
-            End-user certificate:
-            <a href="{{ url_for('admin_download_upload', filename=order.end_user_cert) }}">Download</a>
-          </li>
-        {% endif %}
-        {% if order.digital_signature %}
-          <li class="list-group-item">
-            Digital signature:
-            <a href="{{ url_for('admin_download_upload', filename=order.digital_signature) }}">Download</a>
-          </li>
-        {% endif %}
-        {% if not (order.auth_doc or order.end_user_cert or order.digital_signature) %}
-          <li class="list-group-item text-muted">No uploaded documents</li>
-        {% endif %}
-      </ul>
+      </div>
     </div>
+  </div>
 
-    <div class="col-12">
-      <h5>Items</h5>
-      <ul class="list-group mb-3">
-        {% for it in items %}
-          <li class="list-group-item d-flex justify-content-between">
-            <div>{{ it["name"] }} × {{ it["quantity"] }}</div>
-            <div>${{ "{:,.2f}".format(it["unit_price"] * it["quantity"]) }}</div>
-          </li>
-        {% endfor %}
-      </ul>
-    </div>
-
-    <div class="col-12">
-      <form method="post" class="row g-2">
-        <div class="col-md-4">
-          <label class="form-label small">Export license status</label>
-          <select name="export_license_status" class="form-select">
-            <option value="">(unset)</option>
-            <option {% if order.export_license_status=='Pending' %}selected{% endif %}>Pending</option>
-            <option {% if order.export_license_status=='Approved' %}selected{% endif %}>Approved</option>
-            <option {% if order.export_license_status=='Exempt' %}selected{% endif %}>Exempt</option>
-          </select>
+  <div class="row g-4">
+    <div class="col-lg-8">
+      <div class="card shadow-sm mb-3">
+        <div class="card-header bg-dark text-white">
+          <strong class="mb-0">Government / Procurement Details</strong>
         </div>
-
-        <div class="col-md-4">
-          <label class="form-label small">Order status</label>
-          <select name="status" class="form-select">
-            <option {% if order.status=='placed' %}selected{% endif %}>placed</option>
-            <option {% if order.status=='processing' %}selected{% endif %}>processing</option>
-            <option {% if order.status=='shipped' %}selected{% endif %}>shipped</option>
-            <option {% if order.status=='completed' %}selected{% endif %}>completed</option>
-            <option {% if order.status=='cancelled' %}selected{% endif %}>cancelled</option>
-          </select>
+        <div class="card-body">
+          <dl class="row mb-0">
+            <dt class="col-sm-4 text-muted">Agency</dt><dd class="col-sm-8">{{ order.agency or '—' }}</dd>
+            <dt class="col-sm-4 text-muted">Authorized officer</dt><dd class="col-sm-8">{{ order.authorized_officer or '—' }}</dd>
+            <dt class="col-sm-4 text-muted">Official email</dt><dd class="col-sm-8">{{ order.official_email or '—' }}</dd>
+            <dt class="col-sm-4 text-muted">PO / Contract</dt><dd class="col-sm-8">{{ order.po_number or '—' }} / {{ order.contract_reference or '—' }}</dd>
+            <dt class="col-sm-4 text-muted">Vendor ID</dt><dd class="col-sm-8">{{ order.vendor_id or '—' }}</dd>
+            <dt class="col-sm-4 text-muted">Delivery</dt>
+            <dd class="col-sm-8">{{ order.delivery_location or '—' }}<br><small class="text-muted">{{ order.required_delivery_date or '—' }}</small></dd>
+            <dt class="col-sm-4 text-muted">Declaration</dt><dd class="col-sm-8">{{ 'Yes' if order.declaration_agreed else 'No' }}</dd>
+          </dl>
         </div>
+      </div>
 
-        <div class="col-md-4 d-flex align-items-end">
-          <button class="btn btn-primary">Save changes</button>
+      <div class="card shadow-sm mb-3">
+        <div class="card-header bg-light">
+          <strong class="mb-0">Items</strong>
         </div>
-      </form>
+        <div class="card-body p-0">
+          <ul class="list-group list-group-flush">
+            {% for it in items %}
+              <li class="list-group-item d-flex justify-content-between align-items-center">
+                <div>
+                  <div class="fw-semibold">{{ it["name"] }}</div>
+                  <div class="small text-muted">Quantity: {{ it["quantity"] }} · Unit: ${{ "{:,.2f}".format(it["unit_price"]) }}</div>
+                </div>
+                <div class="fw-semibold">${{ "{:,.2f}".format(it["unit_price"] * it["quantity"]) }}</div>
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+
+      <div class="card shadow-sm">
+        <div class="card-header bg-light">
+          <strong class="mb-0">Uploaded documents (admin only)</strong>
+        </div>
+        <div class="card-body">
+          <div class="d-flex flex-column gap-2">
+            {% if order.auth_doc %}
+              <a class="btn btn-outline-primary btn-sm w-100 text-start" href="{{ url_for('admin_download_upload', filename=order.auth_doc) }}">
+                <i class="bi bi-file-earmark-arrow-down me-2"></i> Authorization Document
+              </a>
+            {% endif %}
+            {% if order.end_user_cert %}
+              <a class="btn btn-outline-primary btn-sm w-100 text-start" href="{{ url_for('admin_download_upload', filename=order.end_user_cert) }}">
+                <i class="bi bi-file-earmark-arrow-down me-2"></i> End-User Certificate
+              </a>
+            {% endif %}
+            {% if order.digital_signature %}
+              <a class="btn btn-outline-primary btn-sm w-100 text-start" href="{{ url_for('admin_download_upload', filename=order.digital_signature) }}">
+                <i class="bi bi-file-earmark-arrow-down me-2"></i> Digital Signature
+              </a>
+            {% endif %}
+            {% if not (order.auth_doc or order.end_user_cert or order.digital_signature) %}
+              <div class="text-muted small">No uploaded documents</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <div class="card shadow-sm mb-3">
+        <div class="card-header bg-light">
+          <strong class="mb-0">Manage Order</strong>
+        </div>
+        <div class="card-body">
+          <form method="post" class="row g-2">
+            <div>
+              <label class="form-label small">Export license status</label>
+              <select name="export_license_status" class="form-select mb-2">
+                <option value="" {% if not order.export_license_status %}selected{% endif %}>(unset)</option>
+                <option {% if order.export_license_status=='Pending' %}selected{% endif %}>Pending</option>
+                <option {% if order.export_license_status=='Approved' %}selected{% endif %}>Approved</option>
+                <option {% if order.export_license_status=='Exempt' %}selected{% endif %}>Exempt</option>
+              </select>
+              {% if order.export_license_status %}
+                {% set e = order.export_license_status %}
+                {% if e == 'Approved' %}
+                  <div class="mb-2"><span class="badge bg-success">Export: {{ e }}</span></div>
+                {% elif e == 'Pending' %}
+                  <div class="mb-2"><span class="badge bg-warning text-dark">Export: {{ e }}</span></div>
+                {% elif e == 'Exempt' %}
+                  <div class="mb-2"><span class="badge bg-info text-dark">Export: {{ e }}</span></div>
+                {% else %}
+                  <div class="mb-2"><span class="badge bg-secondary">Export: {{ e }}</span></div>
+                {% endif %}
+              {% endif %}
+            </div>
+
+            <div>
+              <label class="form-label small">Order status</label>
+              <select name="status" class="form-select mb-3">
+                <option {% if order.status=='placed' %}selected{% endif %}>placed</option>
+                <option {% if order.status=='processing' %}selected{% endif %}>processing</option>
+                <option {% if order.status=='shipped' %}selected{% endif %}>shipped</option>
+                <option {% if order.status=='completed' %}selected{% endif %}>completed</option>
+                <option {% if order.status=='cancelled' %}selected{% endif %}>cancelled</option>
+              </select>
+            </div>
+
+            <div class="d-grid mb-2">
+              <button class="btn btn-primary">Save changes</button>
+            </div>
+
+            <div class="d-grid">
+              <a href="{{ url_for('admin_orders') }}" class="btn btn-outline-secondary">Back to orders</a>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="card shadow-sm">
+        <div class="card-body text-center">
+          <div class="small text-muted">Customer</div>
+          <div class="fw-semibold">{{ order.customer_name or '—' }}</div>
+          <div class="small text-muted">{{ order.customer_email or '—' }}</div>
+          <hr>
+          <div class="small text-muted">Order ID</div>
+          <div class="fw-bold">{{ order.id }}</div>
+          <div class="small text-muted mt-2">Created</div>
+          <div class="text-muted small">{{ order.created_at }}</div>
+        </div>
+      </div>
     </div>
   </div>
 </main>

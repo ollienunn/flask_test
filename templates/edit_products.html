@@ -9,7 +9,17 @@
 </head>
 <body>
   {% include 'navbar.html' %}
+
   <div class="container py-4">
+    <!-- added: quick access buttons for admin pages -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h3 class="mb-0">Manage Products</h3>
+      <div>
+        <a href="{{ url_for('admin_orders') }}" class="btn btn-sm btn-outline-primary me-2">Orders</a>
+        <a href="{{ url_for('admin_products') }}" class="btn btn-sm btn-outline-secondary">Update products</a>
+      </div>
+    </div>
+
     {% if request.args.get('error') == 'in_use' %}
       <div class="alert alert-warning">Cannot delete product — it is referenced by existing orders.</div>
     {% endif %}
