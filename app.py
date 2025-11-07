@@ -438,20 +438,19 @@ def checkout():
 
     try:
         auth_doc_name = _save_file_private_valid("auth_doc")
-        end_user_cert_name = _save_file_private_valid("end_user_cert")
         digital_sig_name = _save_file_private_valid("digital_signature")
     except ValueError as ve:
         flash(str(ve), "danger")
         return redirect(url_for("checkout"))
 
-    # enforce required compliance docs
-    if not auth_doc_name or not end_user_cert_name:
-        flash("Authorization document and End-User certificate are required.", "danger")
+    # enforce only the authorization document from customer; vendor/compliance handled by admin
+    if not auth_doc_name:
+        flash("Authorization document is required.", "danger")
         return redirect(url_for("checkout"))
 
-    # use the private filenames when inserting into orders
+    # store filenames (end_user_cert intentionally not collected here)
     auth_doc_path = auth_doc_name
-    end_user_cert_path = end_user_cert_name
+    end_user_cert_path = None
     digital_sig_path = digital_sig_name
 
     try:
