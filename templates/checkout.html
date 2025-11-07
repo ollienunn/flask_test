@@ -21,10 +21,9 @@
       {% endif %}
     {% endwith %}
 
+    <!-- IMPORTANT: enctype must be multipart/form-data so files are sent -->
     <form method="post" enctype="multipart/form-data" class="row g-3">
-      <div class="col-12">
-        <h5>1. Buyer Identification</h5>
-      </div>
+      <div class="col-12"><h5>1. Buyer Identification</h5></div>
 
       <div class="col-md-6">
         <label class="form-label small">Agency / Department</label>
@@ -49,9 +48,7 @@
         <input name="contact_number" class="form-control" required>
       </div>
 
-      <div class="col-12">
-        <h5>2. Procurement Authorization</h5>
-      </div>
+      <div class="col-12"><h5>2. Procurement Authorization</h5></div>
 
       <div class="col-md-4">
         <label class="form-label small">Purchase Order (PO) Number</label>
@@ -71,9 +68,7 @@
         <input name="auth_doc" type="file" accept="application/pdf" class="form-control" required>
       </div>
 
-      <div class="col-12">
-        <h5>3. Vendor & Compliance Checks</h5>
-      </div>
+      <div class="col-12"><h5>3. Vendor & Compliance Checks</h5></div>
 
       <div class="col-md-6">
         <label class="form-label small">Vendor ID (CAGE / ABN / UEI)</label>
@@ -94,9 +89,7 @@
         </select>
       </div>
 
-      <div class="col-12">
-        <h5>4. Delivery & Payment</h5>
-      </div>
+      <div class="col-12"><h5>4. Delivery & Payment</h5></div>
 
       <div class="col-md-8">
         <label class="form-label small">Delivery Location (secure facility / airbase)</label>
@@ -115,9 +108,7 @@
         </select>
       </div>
 
-      <div class="col-12">
-        <h5>5. Confirmation</h5>
-      </div>
+      <div class="col-12"><h5>5. Confirmation</h5></div>
 
       <div class="col-12">
         <div class="form-check">

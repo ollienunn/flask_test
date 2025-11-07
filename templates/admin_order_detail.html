@@ -1,0 +1,95 @@
+{% include 'navbar.html' %}
+<main class="container py-4">
+  <a class="btn btn-sm btn-outline-secondary mb-3" href="{{ url_for('admin_orders') }}">&larr; Back to orders</a>
+
+  <h4>Order #{{ order.id }} — {{ order.created_at }}</h4>
+  <div class="row g-3 mb-3">
+    <div class="col-md-6">
+      <strong>Customer</strong><br>{{ order.customer_name }} &lt;{{ order.customer_email }}&gt;
+    </div>
+    <div class="col-md-6 text-end">
+      <strong>Total</strong><br>${{ "{:,.2f}".format(order.total) }}
+    </div>
+
+    <div class="col-12">
+      <h5>Government / Procurement Details</h5>
+      <dl class="row">
+        <dt class="col-sm-3">Agency</dt><dd class="col-sm-9">{{ order.agency }}</dd>
+        <dt class="col-sm-3">Authorized officer</dt><dd class="col-sm-9">{{ order.authorized_officer }}</dd>
+        <dt class="col-sm-3">Official email</dt><dd class="col-sm-9">{{ order.official_email }}</dd>
+        <dt class="col-sm-3">PO / Contract</dt><dd class="col-sm-9">{{ order.po_number }} / {{ order.contract_reference }}</dd>
+        <dt class="col-sm-3">Vendor ID</dt><dd class="col-sm-9">{{ order.vendor_id }}</dd>
+        <dt class="col-sm-3">Delivery</dt><dd class="col-sm-9">{{ order.delivery_location }} ({{ order.required_delivery_date }})</dd>
+        <dt class="col-sm-3">Declaration</dt><dd class="col-sm-9">{{ 'Yes' if order.declaration_agreed else 'No' }}</dd>
+      </dl>
+    </div>
+
+    <div class="col-12">
+      <h5>Uploaded documents (admin only)</h5>
+      <ul class="list-group">
+        {% if order.auth_doc %}
+          <li class="list-group-item">
+            Authorization doc:
+            <a href="{{ url_for('admin_download_upload', filename=order.auth_doc) }}">Download</a>
+          </li>
+        {% endif %}
+        {% if order.end_user_cert %}
+          <li class="list-group-item">
+            End-user certificate:
+            <a href="{{ url_for('admin_download_upload', filename=order.end_user_cert) }}">Download</a>
+          </li>
+        {% endif %}
+        {% if order.digital_signature %}
+          <li class="list-group-item">
+            Digital signature:
+            <a href="{{ url_for('admin_download_upload', filename=order.digital_signature) }}">Download</a>
+          </li>
+        {% endif %}
+        {% if not (order.auth_doc or order.end_user_cert or order.digital_signature) %}
+          <li class="list-group-item text-muted">No uploaded documents</li>
+        {% endif %}
+      </ul>
+    </div>
+
+    <div class="col-12">
+      <h5>Items</h5>
+      <ul class="list-group mb-3">
+        {% for it in items %}
+          <li class="list-group-item d-flex justify-content-between">
+            <div>{{ it["name"] }} × {{ it["quantity"] }}</div>
+            <div>${{ "{:,.2f}".format(it["unit_price"] * it["quantity"]) }}</div>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <div class="col-12">
+      <form method="post" class="row g-2">
+        <div class="col-md-4">
+          <label class="form-label small">Export license status</label>
+          <select name="export_license_status" class="form-select">
+            <option value="">(unset)</option>
+            <option {% if order.export_license_status=='Pending' %}selected{% endif %}>Pending</option>
+            <option {% if order.export_license_status=='Approved' %}selected{% endif %}>Approved</option>
+            <option {% if order.export_license_status=='Exempt' %}selected{% endif %}>Exempt</option>
+          </select>
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label small">Order status</label>
+          <select name="status" class="form-select">
+            <option {% if order.status=='placed' %}selected{% endif %}>placed</option>
+            <option {% if order.status=='processing' %}selected{% endif %}>processing</option>
+            <option {% if order.status=='shipped' %}selected{% endif %}>shipped</option>
+            <option {% if order.status=='completed' %}selected{% endif %}>completed</option>
+            <option {% if order.status=='cancelled' %}selected{% endif %}>cancelled</option>
+          </select>
+        </div>
+
+        <div class="col-md-4 d-flex align-items-end">
+          <button class="btn btn-primary">Save changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</main>

@@ -5,11 +5,15 @@ from datetime import datetime
 import re
 from werkzeug.utils import secure_filename
 import os
+import sqlite3
+from flask import g, send_from_directory, abort
 from functools import wraps
-from flask import send_from_directory, abort
 
 app = Flask(__name__)
 DB_PATH = Path(__file__).parent / "store.db"
+PRIVATE_UPLOADS = Path(__file__).parent / "private_uploads"
+PRIVATE_UPLOADS.mkdir(parents=True, exist_ok=True)
+
 app.secret_key = os.environ.get("FLASK_SECRET", "dev-secret-please-change")
 
 # simple login_required decorator
@@ -22,14 +26,16 @@ def login_required(f):
     return wrapped
 
 def get_db():
+    """Return a sqlite3.Connection (row factory set) stored in flask.g"""
     if 'db' not in g:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON;")
         g.db = conn
     return g.db
 
 @app.teardown_appcontext
-def close_db(exc):
+def close_db(exc=None):
     db = g.pop('db', None)
     if db is not None:
         db.close()
@@ -314,7 +320,8 @@ def _ensure_order_columns(conn):
     Add government-specific columns to orders table if they don't exist.
     Safe to run multiple times.
     """
-    cols = { r["name"] for r in conn.execute("PRAGMA table_info(orders)").fetchall() }
+    cur = conn.execute("PRAGMA table_info(orders)").fetchall()
+    cols = { r[1] for r in cur }
     additions = {
         "agency": "TEXT",
         "authorized_officer": "TEXT",
@@ -338,8 +345,8 @@ def _ensure_order_columns(conn):
         if name not in cols:
             conn.execute(f"ALTER TABLE orders ADD COLUMN {name} {sqltype};")
 
-# remove @app.before_first_request decorator usage and instead run once at startup
 def _ensure_schema_startup():
+    """Run once at startup to ensure orders table has the required columns."""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
@@ -562,6 +569,48 @@ def admin_download_upload(filename):
         return send_from_directory(str(PRIVATE_UPLOADS), filename, as_attachment=True)
     except FileNotFoundError:
         abort(404)
+
+# --- Admin: orders list and order detail (review / edit export license) ---
+@app.route("/admin/orders")
+@login_required
+def admin_orders():
+    """List orders. filter=query param: 'current' (default) or 'previous'"""
+    db = get_db()
+    filt = request.args.get("filter", "current")
+    if filt == "previous":
+        rows = db.execute(
+            "SELECT o.*, c.name AS customer_name FROM orders o LEFT JOIN customers c ON o.customer_id = c.id "
+            "WHERE o.status IN ('completed','shipped','cancelled') ORDER BY o.created_at DESC"
+        ).fetchall()
+    else:
+        rows = db.execute(
+            "SELECT o.*, c.name AS customer_name FROM orders o LEFT JOIN customers c ON o.customer_id = c.id "
+            "WHERE o.status NOT IN ('completed','shipped','cancelled') ORDER BY o.created_at DESC"
+        ).fetchall()
+    return render_template("admin_orders.html", orders=rows, filter=filt)
+
+@app.route("/admin/order/<int:order_id>", methods=["GET", "POST"])
+@login_required
+def admin_order_detail(order_id):
+    db = get_db()
+    if request.method == "POST":
+        # update export license status and optionally order status
+        export_status = request.form.get("export_license_status")
+        order_status = request.form.get("status")
+        db.execute("UPDATE orders SET export_license_status = ?, status = ? WHERE id = ?", (export_status, order_status, order_id))
+        db.commit()
+        flash("Order updated.", "success")
+        return redirect(url_for("admin_order_detail", order_id=order_id))
+
+    order = db.execute(
+        "SELECT o.*, c.name AS customer_name, c.email AS customer_email FROM orders o LEFT JOIN customers c ON o.customer_id = c.id WHERE o.id = ?",
+        (order_id,)
+    ).fetchone()
+    items = db.execute(
+        "SELECT oi.quantity, oi.unit_price, p.name FROM order_items oi JOIN products p ON oi.product_id = p.id WHERE oi.order_id = ?",
+        (order_id,)
+    ).fetchall()
+    return render_template("admin_order_detail.html", order=order, items=items)
 
 if __name__ == "__main__":
     # ensure DB schema has the required order columns before serving

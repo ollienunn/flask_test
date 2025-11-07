@@ -1,0 +1,38 @@
+{% include 'navbar.html' %}
+<main class="container py-4">
+  <h3>Admin — Orders</h3>
+
+  <div class="mb-3">
+    <a href="{{ url_for('admin_orders', filter='current') }}" class="btn btn-sm btn-outline-primary {% if filter!='previous' %}active{% endif %}">Current</a>
+    <a href="{{ url_for('admin_orders', filter='previous') }}" class="btn btn-sm btn-outline-secondary {% if filter=='previous' %}active{% endif %}">Previous</a>
+  </div>
+
+  <table class="table table-sm table-striped">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Placed</th>
+        <th>Customer</th>
+        <th>Total</th>
+        <th>Status</th>
+        <th>Export License</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for o in orders %}
+      <tr>
+        <td>{{ o.id }}</td>
+        <td>{{ o.created_at }}</td>
+        <td>{{ o.customer_name or '—' }}</td>
+        <td>${{ "{:,.2f}".format(o.total) }}</td>
+        <td>{{ o.status }}</td>
+        <td>{{ o.export_license_status or '—' }}</td>
+        <td><a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin_order_detail', order_id=o.id) }}">View</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="text-muted">No orders</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</main>
