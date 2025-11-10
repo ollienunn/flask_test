@@ -9,8 +9,10 @@
 </head>
 <body>
   {% include 'navbar.html' %}
-  <div class="container py-4">
-    <h3>Your Cart</h3>
+
+  <main class="container py-5">
+    <h3 class="mb-4">Your Cart</h3>
+
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
         {% for cat, msg in messages %}
@@ -20,47 +22,91 @@
     {% endwith %}
 
     {% if items %}
-    <div class="list-group mb-3">
-      {% for it in items %}
-      <div class="list-group-item d-flex justify-content-between align-items-center">
-        <div>
-          <strong>{{ it.product.name }}</strong><br>
-          <small class="text-muted">SKU: {{ it.product.sku }}</small><br>
-          <small class="text-muted">Unit: ${{ "{:,.2f}".format(it.product.price) }}</small><br>
-          <small class="text-muted">In stock: {{ it.product.stock }}</small>
+      <div class="row g-3">
+        <div class="col-lg-8">
+          <div class="list-group">
+            {% for it in items %}
+              <div class="list-group-item d-flex gap-3 py-3">
+                {% if it.image %}
+                  <img src="{{ url_for('static', filename=it.image) }}" alt="" width="96" height="64" class="flex-shrink-0 rounded">
+                {% else %}
+                  <div class="flex-shrink-0 bg-light border rounded d-flex align-items-center justify-content-center" style="width:96px;height:64px;">
+                    <span class="text-muted small">No image</span>
+                  </div>
+                {% endif %}
+
+                <div class="flex-grow-1">
+                  <div class="d-flex justify-content-between">
+                    <div>
+                      <a class="h6 mb-1 d-block text-decoration-none text-dark" href="{{ url_for('product_detail', sku=it.sku) }}">{{ it.name }}</a>
+                      <div class="small text-muted">SKU: {{ it.sku }}</div>
+                    </div>
+                    <div class="text-end">
+                      <div class="fw-semibold">${{ "{:,.2f}".format(it.price) }}</div>
+                      <div class="small text-muted">Stock: {{ it.stock }}</div>
+                    </div>
+                  </div>
+
+                  <div class="d-flex justify-content-between align-items-center mt-2">
+                    <div class="d-flex gap-2 align-items-center">
+                      <form method="post" action="{{ url_for('cart_add') }}" class="d-flex">
+                        <input type="hidden" name="sku" value="{{ it.sku }}">
+                        <input type="hidden" name="qty" value="1">
+                        <button class="btn btn-sm btn-outline-secondary" type="submit">+ Add</button>
+                      </form>
+
+                      <form method="post" action="{{ url_for('cart_remove') }}" class="d-inline-block">
+                        <input type="hidden" name="sku" value="{{ it.sku }}">
+                        <button class="btn btn-sm btn-outline-danger">Remove</button>
+                      </form>
+
+                      <div class="small text-muted ms-2">Quantity: <strong>{{ it.qty }}</strong></div>
+                    </div>
+
+                    <div class="fw-semibold">${{ "{:,.2f}".format(it.subtotal) }}</div>
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
         </div>
-        <div class="text-end">
-          <form method="post" action="{{ url_for('cart_update') }}" class="d-inline-block me-2">
-            <input type="hidden" name="sku" value="{{ it.product.sku }}">
-            <input type="hidden" name="action" value="set">
-            <input type="number" name="qty" value="{{ it.qty }}" min="1" max="{{ it.product.stock }}" style="width:80px" class="form-control d-inline-block">
-            <button class="btn btn-sm btn-secondary mt-2">Update</button>
-          </form>
 
-          <form method="post" action="{{ url_for('cart_update') }}" class="d-inline-block">
-            <input type="hidden" name="sku" value="{{ it.product.sku }}">
-            <input type="hidden" name="action" value="remove">
-            <button class="btn btn-sm btn-outline-danger">Remove</button>
-          </form>
+        <div class="col-lg-4">
+          <div class="card shadow-sm">
+            <div class="card-body">
+              <h6 class="mb-3">Order Summary</h6>
+              <div class="d-flex justify-content-between mb-2">
+                <div class="text-muted">Items</div>
+                <div class="fw-semibold">${{ "{:,.2f}".format(total) }}</div>
+              </div>
 
-          <div class="mt-2"><strong>${{ "{:,.2f}".format(it.subtotal) }}</strong></div>
+              <hr>
+
+              <div class="d-grid">
+                <a href="{{ url_for('checkout') }}" class="btn btn-success">Proceed to Checkout</a>
+                <a href="{{ url_for('products') }}" class="btn btn-outline-secondary mt-2">Continue shopping</a>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-      {% endfor %}
-    </div>
-
-    <div class="mb-3 text-end">
-      <h4>Total: ${{ "{:,.2f}".format(total) }}</h4>
-    </div>
-
-    <div class="d-flex justify-content-between">
-      <a href="{{ url_for('products') }}" class="btn btn-outline-secondary">Continue shopping</a>
-      <a href="{{ url_for('checkout') }}" class="btn btn-primary">Checkout</a>
-    </div>
-
     {% else %}
-      <p>Your cart is empty. <a href="{{ url_for('products') }}">Browse products</a></p>
+      <div class="card shadow-sm">
+        <div class="card-body text-center">
+          <p class="mb-0">Your cart is empty.</p>
+          <a href="{{ url_for('products') }}" class="btn btn-outline-primary mt-3">Browse products</a>
+        </div>
+      </div>
     {% endif %}
-  </div>
+  </main>
+
+  <footer class="bg-light border-top py-4 mt-5">
+    <div class="container text-center">
+      <p class="mb-1">&copy; 2025 Webstore — MachZero</p>
+      <small class="text-muted">Contact: <a href="mailto:info@example.com">info@example.com</a></small>
+    </div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

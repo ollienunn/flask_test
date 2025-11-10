@@ -8,6 +8,8 @@ import os
 import sqlite3
 from flask import g, send_from_directory, abort
 from functools import wraps
+from werkzeug.security import generate_password_hash, check_password_hash
+import json
 
 app = Flask(__name__)
 DB_PATH = Path(__file__).parent / "store.db"
@@ -208,24 +210,159 @@ def admin_delete_product():
         db.rollback()
     return redirect(url_for("admin_products"))
 
+def _ensure_order_columns(conn):
+    """
+    Add government-specific columns to orders table if they don't exist.
+    Safe to run multiple times.
+    """
+    cur = conn.execute("PRAGMA table_info(orders)").fetchall()
+    cols = { r[1] for r in cur }
+    additions = {
+        "agency": "TEXT",
+        "authorized_officer": "TEXT",
+        "official_email": "TEXT",
+        "position_clearance": "TEXT",
+        "contact_number": "TEXT",
+        "po_number": "TEXT",
+        "contract_reference": "TEXT",
+        "funding_source": "TEXT",
+        "auth_doc": "TEXT",
+        "vendor_id": "TEXT",
+        "end_user_cert": "TEXT",
+        "export_license_status": "TEXT",
+        "delivery_location": "TEXT",
+        "required_delivery_date": "TEXT",
+        "payment_method": "TEXT",
+        "declaration_agreed": "INTEGER",
+        "digital_signature": "TEXT"
+    }
+    for name, sqltype in additions.items():
+        if name not in cols:
+            conn.execute(f"ALTER TABLE orders ADD COLUMN {name} {sqltype};")
+
+def _ensure_schema_startup():
+    """Run once at startup to ensure orders/table and carts/password columns exist."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        _ensure_order_columns(conn)
+        # ensure customers table has a password column (safe to run multiple times)
+        cur = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='customers'").fetchone()
+        if cur:
+            cols = { r[1] for r in conn.execute("PRAGMA table_info(customers)").fetchall() }
+            if "password" not in cols:
+                conn.execute("ALTER TABLE customers ADD COLUMN password TEXT;")
+        # ensure carts table exists to persist per-customer cart JSON
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS carts (
+                customer_id INTEGER PRIMARY KEY,
+                cart TEXT,
+                FOREIGN KEY(customer_id) REFERENCES customers(id) ON DELETE CASCADE
+            );
+        """)
+        conn.commit()
+    finally:
+        conn.close()
+
+# Cart persistence helpers
+def load_customer_cart(customer_id):
+    db = get_db()
+    row = db.execute("SELECT cart FROM carts WHERE customer_id = ?", (customer_id,)).fetchone()
+    if not row or not row["cart"]:
+        return {}
+    try:
+        return json.loads(row["cart"])
+    except Exception:
+        return {}
+
+def save_customer_cart(customer_id, cart_dict):
+    db = get_db()
+    data = json.dumps(cart_dict or {})
+    cur = db.execute("SELECT 1 FROM carts WHERE customer_id = ?", (customer_id,)).fetchone()
+    if cur:
+        db.execute("UPDATE carts SET cart = ? WHERE customer_id = ?", (data, customer_id))
+    else:
+        db.execute("INSERT INTO carts (customer_id, cart) VALUES (?, ?)", (customer_id, data))
+    db.commit()
+
+def merge_carts(session_cart, stored_cart):
+    """Merge two cart dicts {sku: qty} — session wins for additive quantities."""
+    out = dict(stored_cart or {})
+    for sku, qty in (session_cart or {}).items():
+        try:
+            q = int(qty)
+        except Exception:
+            q = 0
+        if q <= 0:
+            continue
+        out[sku] = out.get(sku, 0) + q
+    return out
+
+def save_cart_if_logged_in():
+    """Call after mutating session['cart'] to persist for logged-in customers."""
+    cust_id = session.get("customer_id")
+    if cust_id:
+        save_customer_cart(cust_id, session.get("cart", {}) or {})
+
+# --- Auth routes: register / login / logout ---
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    if request.method == "GET":
+        return render_template("register.html")
+    name = (request.form.get("name") or "").strip()
+    email = (request.form.get("email") or "").strip().lower()
+    password = request.form.get("password") or ""
+    if not email or not password or not name:
+        flash("Name, email and password required.", "danger")
+        return redirect(url_for("register"))
+    db = get_db()
+    if db.execute("SELECT id FROM customers WHERE email = ?", (email,)).fetchone():
+        flash("Account already exists for that email.", "warning")
+        return redirect(url_for("login"))
+    pw_hash = generate_password_hash(password)
+    created_at = datetime.utcnow().isoformat()
+    cur = db.execute("INSERT INTO customers (name, email, created_at, password) VALUES (?, ?, ?, ?)",
+                     (name, email, created_at, pw_hash))
+    db.commit()
+    session["customer_id"] = cur.lastrowid
+    session["customer_name"] = name
+    # if there is a session cart, save it to DB
+    if session.get("cart"):
+        save_customer_cart(session["customer_id"], session["cart"])
+    flash("Registration complete. Logged in.", "success")
+    return redirect(url_for("products"))
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    if request.method == "POST":
-        username = (request.form.get("username") or "").strip()
-        password = (request.form.get("password") or "").strip()
-        ADMIN_USER = os.environ.get("ADMIN_USER", "Admin")
-        ADMIN_PASS = os.environ.get("ADMIN_PASS", "MachZero")
-        if username == ADMIN_USER and password == ADMIN_PASS:
-            session["is_admin"] = True
-            next_url = request.args.get("next") or url_for("admin_products")
-            return redirect(next_url)
-        flash("Invalid credentials", "danger")
-    return render_template("login.html")
+    if request.method == "GET":
+        return render_template("login.html")
+    email = (request.form.get("email") or "").strip().lower()
+    password = request.form.get("password") or ""
+    db = get_db()
+    row = db.execute("SELECT id, name, password FROM customers WHERE email = ?", (email,)).fetchone()
+    if not row or not row["password"] or not check_password_hash(row["password"], password):
+        flash("Invalid email or password.", "danger")
+        return redirect(url_for("login"))
+    # login success — merge session cart with stored cart and persist
+    stored = load_customer_cart(row["id"])
+    sess_cart = session.get("cart", {}) or {}
+    merged = merge_carts(sess_cart, stored)
+    session["customer_id"] = row["id"]
+    session["customer_name"] = row["name"]
+    session["cart"] = merged
+    save_customer_cart(row["id"], merged)
+    flash("Logged in.", "success")
+    return redirect(url_for("products"))
 
 @app.route("/logout")
 def logout():
-    session.pop("is_admin", None)
-    return redirect(url_for("index"))
+    # keep session cart in DB for logged-in user was already saved on actions;
+    # just pop auth fields and keep session['cart'] empty (customer cart stays in DB)
+    session.pop("customer_id", None)
+    session.pop("customer_name", None)
+    session.pop("cart", None)
+    flash("Logged out.", "info")
+    return redirect(url_for("products"))
 
 # -- Cart helpers ------------------------------------------------
 def _cart_get():
@@ -264,17 +401,20 @@ def cart_add():
     else:
         cart[sku] = desired
     _cart_set(cart)
+    # persist for logged-in customers
+    save_cart_if_logged_in()
     flash("Added to cart.", "success")
     return redirect(request.referrer or url_for("products"))
 
-# -- View / update cart -----------------------------------------
-@app.route("/cart", methods=["GET"])
+@app.route("/cart")
 def cart_view():
-    cart = _cart_get()
+    """Render customer's cart (used by navbar link)."""
+    cart = session.get("cart", {}) or {}
+    db = get_db()
     items = []
     total = 0.0
+
     if cart:
-        db = get_db()
         placeholders = ",".join("?" for _ in cart.keys())
         rows = db.execute(f"SELECT id, sku, name, price, image, stock FROM products WHERE sku IN ({placeholders})", tuple(cart.keys())).fetchall()
         prod_map = {r["sku"]: dict(r) for r in rows}
@@ -282,79 +422,26 @@ def cart_view():
             p = prod_map.get(sku)
             if not p:
                 continue
-            subtotal = (p["price"] or 0.0) * qty
+            try:
+                q = int(qty)
+            except Exception:
+                q = 0
+            subtotal = (p.get("price") or 0.0) * q
             total += subtotal
-            items.append({"product": p, "qty": qty, "subtotal": subtotal})
+            items.append({
+                "sku": sku,
+                "id": p.get("id"),
+                "name": p.get("name"),
+                "price": p.get("price") or 0.0,
+                "qty": q,
+                "stock": p.get("stock") or 0,
+                "subtotal": subtotal,
+                "image": p.get("image")
+            })
+
     return render_template("cart.html", items=items, total=total)
 
-@app.route("/cart/update", methods=["POST"])
-def cart_update():
-    # supports quantity updates and removal
-    cart = _cart_get()
-    action = request.form.get("action")
-    sku = (request.form.get("sku") or "").strip().upper()
-    if action == "remove":
-        cart.pop(sku, None)
-    elif action == "set":
-        try:
-            qty = int(request.form.get("qty") or 0)
-        except ValueError:
-            qty = 0
-        if qty <= 0:
-            cart.pop(sku, None)
-        else:
-            # clamp to available stock
-            db = get_db()
-            prod = db.execute("SELECT stock FROM products WHERE sku = ?", (sku,)).fetchone()
-            if prod:
-                if qty > (prod["stock"] or 0):
-                    qty = prod["stock"]
-                    flash(f"Quantity adjusted to available stock for {sku}.", "warning")
-            cart[sku] = qty
-    _cart_set(cart)
-    return redirect(url_for("cart_view"))
-
-# -- Checkout ----------------------------------------------------
-def _ensure_order_columns(conn):
-    """
-    Add government-specific columns to orders table if they don't exist.
-    Safe to run multiple times.
-    """
-    cur = conn.execute("PRAGMA table_info(orders)").fetchall()
-    cols = { r[1] for r in cur }
-    additions = {
-        "agency": "TEXT",
-        "authorized_officer": "TEXT",
-        "official_email": "TEXT",
-        "position_clearance": "TEXT",
-        "contact_number": "TEXT",
-        "po_number": "TEXT",
-        "contract_reference": "TEXT",
-        "funding_source": "TEXT",
-        "auth_doc": "TEXT",
-        "vendor_id": "TEXT",
-        "end_user_cert": "TEXT",
-        "export_license_status": "TEXT",
-        "delivery_location": "TEXT",
-        "required_delivery_date": "TEXT",
-        "payment_method": "TEXT",
-        "declaration_agreed": "INTEGER",
-        "digital_signature": "TEXT"
-    }
-    for name, sqltype in additions.items():
-        if name not in cols:
-            conn.execute(f"ALTER TABLE orders ADD COLUMN {name} {sqltype};")
-
-def _ensure_schema_startup():
-    """Run once at startup to ensure orders table has the required columns."""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    try:
-        _ensure_order_columns(conn)
-        conn.commit()
-    finally:
-        conn.close()
-
+# ---------- Checkout route (government) ----------
 @app.route("/checkout", methods=["GET", "POST"])
 def checkout():
     cart = session.get("cart", {}) or {}
@@ -373,15 +460,14 @@ def checkout():
         if not p:
             flash(f"Product {sku} not found, removed from cart.", "warning")
             continue
-        subtotal = (p["price"] or 0.0) * qty
+        subtotal = (p["price"] or 0.0) * int(qty)
         total += subtotal
-        items.append({"id": p["id"], "sku": sku, "name": p["name"], "price": p["price"], "qty": qty, "stock": p["stock"], "subtotal": subtotal})
+        items.append({"id": p["id"], "sku": sku, "name": p["name"], "price": p["price"], "qty": int(qty), "stock": p["stock"], "subtotal": subtotal})
 
     if request.method == "GET":
         return render_template("checkout.html", items=items, total=total)
 
     # POST: collect gov fields and files
-    # Required: official_email and declaration checkbox
     agency = (request.form.get("agency") or "").strip()
     authorized_officer = (request.form.get("authorized_officer") or "").strip()
     official_email = (request.form.get("official_email") or "").strip()
@@ -406,33 +492,29 @@ def checkout():
     if not declaration:
         flash("You must confirm you are an authorized government representative.", "danger")
         return redirect(url_for("checkout"))
-
-    # Require official government email domain
     if not is_official_email(official_email):
         flash("Official government email required (e.g. name@domain.gov).", "danger")
         return redirect(url_for("checkout"))
 
-    # Allowed extensions and size limit
+    # file validation + save helper
     ALLOWED_DOC_EXT = {".pdf", ".png", ".jpg", ".jpeg"}
     MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5 MB
 
-    def _save_file_private_valid(field_name, allowed_exts=ALLOWED_DOC_EXT, max_bytes=MAX_UPLOAD_BYTES):
+    def _save_file_private_valid(field_name):
         f = request.files.get(field_name)
         if f and f.filename:
             filename = secure_filename(f.filename)
             ext = Path(filename).suffix.lower()
-            if ext not in allowed_exts:
-                raise ValueError(f"Invalid file type for {field_name}. Allowed: {', '.join(sorted(allowed_exts))}")
-            # check size
+            if ext not in ALLOWED_DOC_EXT:
+                raise ValueError(f"Invalid file type for {field_name}.")
             f.stream.seek(0, os.SEEK_END)
             size = f.stream.tell()
             f.stream.seek(0)
-            if size > max_bytes:
-                raise ValueError(f"File too large for {field_name} (max {max_bytes} bytes)")
+            if size > MAX_UPLOAD_BYTES:
+                raise ValueError(f"File too large for {field_name}.")
             dest_name = f"{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{filename}"
             dest = PRIVATE_UPLOADS / dest_name
             f.save(str(dest))
-            # store filename only (private storage)
             return dest.name
         return None
 
@@ -443,12 +525,10 @@ def checkout():
         flash(str(ve), "danger")
         return redirect(url_for("checkout"))
 
-    # enforce only the authorization document from customer; vendor/compliance handled by admin
     if not auth_doc_name:
         flash("Authorization document is required.", "danger")
         return redirect(url_for("checkout"))
 
-    # store filenames (end_user_cert intentionally not collected here)
     auth_doc_path = auth_doc_name
     end_user_cert_path = None
     digital_sig_path = digital_sig_name
@@ -498,7 +578,10 @@ def checkout():
             db.execute("UPDATE products SET stock = stock - ? WHERE id = ?", (it["qty"], it["id"]))
 
         db.commit()
+        # clear session cart and persisted cart
         session.pop("cart", None)
+        if session.get("customer_id"):
+            save_customer_cart(session["customer_id"], {})
         flash("Order placed. Thank you!", "success")
         return redirect(url_for("order_success", order_id=order_id))
     except Exception as e:
