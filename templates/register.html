@@ -2,19 +2,22 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Customer Login</title>
+  <title>Register</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
 <body>
   {% include 'navbar.html' %}
   <main class="container py-5" style="max-width:520px;">
-    <h3 class="mb-3">Customer Login</h3>
+    <h3 class="mb-3">Create Account</h3>
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}{% for cat,msg in messages %}<div class="alert alert-{{ cat }}">{{ msg }}</div>{% endfor %}{% endif %}
     {% endwith %}
     <form method="post" class="card card-body shadow-sm">
+      <div class="mb-3">
+        <label class="form-label small">Full name</label>
+        <input name="name" class="form-control" required>
+      </div>
       <div class="mb-3">
         <label class="form-label small">Email</label>
         <input name="email" type="email" class="form-control" required>
@@ -24,8 +27,8 @@
         <input name="password" type="password" class="form-control" required>
       </div>
       <div class="d-flex justify-content-between align-items-center">
-        <a href="{{ url_for('register') }}" class="small">Create account</a>
-        <button class="btn btn-primary">Login</button>
+        <a href="{{ url_for('login') }}" class="small">Already have an account?</a>
+        <button class="btn btn-primary">Create account</button>
       </div>
     </form>
   </main>

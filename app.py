@@ -469,6 +469,11 @@ def cart_view():
 # ---------- Checkout route (government) ----------
 @app.route("/checkout", methods=["GET", "POST"])
 def checkout():
+    # require customer login
+    if not session.get("customer_id"):
+        flash("You must be logged in as a customer to checkout.", "warning")
+        return redirect(url_for("login", next=url_for("checkout")))
+
     cart = session.get("cart", {}) or {}
     if not cart:
         flash("Your cart is empty.", "warning")
