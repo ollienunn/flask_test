@@ -39,17 +39,14 @@ def admin_login():
     if username == ADMIN_USER and password == ADMIN_PASS:
         session["is_admin"] = True
         session["admin_user"] = username
-        flash("Admin logged in.", "success")
         next_url = request.args.get("next") or url_for("admin_products")
         return redirect(next_url)
-    flash("Invalid admin credentials.", "danger")
     return redirect(url_for("admin_login"))
 
 @app.route("/admin/logout")
 def admin_logout():
     session.pop("is_admin", None)
     session.pop("admin_user", None)
-    flash("Admin logged out.", "info")
     return redirect(url_for("index"))
 
 def get_db():
