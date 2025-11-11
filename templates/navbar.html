@@ -40,3 +40,17 @@
     </div>
   </div>
 </nav>
+
+<!-- Service worker registration (runs on pages that include this navbar) -->
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/static/sw.js').then(function(reg){
+      // registration succeeded
+      console.log('SW registered:', reg.scope);
+    }).catch(function(err){
+      console.log('SW registration failed:', err);
+    });
+  });
+}
+</script>
