@@ -1,8 +1,9 @@
 {
   "name": "Webstore",
   "short_name": "Webstore",
-  "description": "Progressive Web App for the Webstore",
+  "description": "Webstore PWA",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#0b3d2e",

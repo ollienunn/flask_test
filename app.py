@@ -742,6 +742,11 @@ def cart_remove():
         flash("Removed from cart.", "success")
     return redirect(request.referrer or url_for("cart_view"))
 
+@app.route("/sw.js")
+def service_worker():
+    # serve the static service worker file at site root so its scope is '/'
+    return send_from_directory(app.static_folder, "sw.js", mimetype="application/javascript")
+
 if __name__ == "__main__":
     # ensure DB schema has the required order columns before serving
     _ensure_schema_startup()
