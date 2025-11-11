@@ -158,4 +158,23 @@
   </div>
 </footer>
 
+<script>
+  // read ?selected=... and highlight + scroll that product into view
+  document.addEventListener('DOMContentLoaded', function () {
+    const params = new URLSearchParams(window.location.search);
+    const selected = params.get('selected');
+    if (!selected) return;
+    const el = document.getElementById('product-' + selected);
+    if (!el) return;
+    // small delay so page renders then perform smooth scroll + highlight
+    setTimeout(function () {
+      el.classList.add('product-highlight');
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // ensure pronounced focus for keyboard users
+      el.setAttribute('tabindex', '-1');
+      el.focus({ preventScroll: true });
+    }, 180);
+  });
+</script>
+
 </html>
