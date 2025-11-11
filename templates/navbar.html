@@ -1,33 +1,40 @@
-<nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom shadow-sm">
+<nav class="navbar navbar-expand-lg navbar-light bg-light border-bottom">
   <div class="container">
-    <a class="navbar-brand d-flex align-items-center" href="{{ url_for('index') }}">
-      <img src="{{ url_for('static', filename='images/Logo.png') }}" alt="Logo" class="nav-logo me-2">
-      Webstore
-    </a>
+    <a class="navbar-brand" href="{{ url_for('index') }}">Webstore</a>
 
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav" aria-controls="mainNav" aria-expanded="false" aria-label="Toggle navigation">
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMain" aria-controls="navMain" aria-expanded="false" aria-label="Toggle navigation">
       <span class="navbar-toggler-icon"></span>
     </button>
 
-    <div class="collapse navbar-collapse" id="mainNav">
+    <div class="collapse navbar-collapse" id="navMain">
       <ul class="navbar-nav me-auto mb-2 mb-lg-0">
         <li class="nav-item"><a class="nav-link" href="{{ url_for('products') }}">Products</a></li>
         <li class="nav-item"><a class="nav-link" href="{{ url_for('about') }}">About</a></li>
       </ul>
 
       <div class="d-flex align-items-center">
-        <a class="btn btn-outline-secondary position-relative me-2" href="{{ url_for('cart_view') }}">
+        <a class="btn btn-outline-secondary position-relative me-3" href="{{ url_for('cart_view') }}">
           Cart
           {% if cart_count and cart_count > 0 %}
-            <span class="badge bg-danger position-absolute top-0 start-100 translate-middle">{{ cart_count }}</span>
+            <span class="badge bg-danger ms-2">{{ cart_count }}</span>
           {% endif %}
         </a>
 
+        {# Admin area: only for admin logins #}
         {% if session.get('is_admin') %}
-          <a class="btn btn-sm btn-outline-dark me-2" href="{{ url_for('admin_products') }}">Admin</a>
-          <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('logout') }}">Logout</a>
+          <a class="btn btn-sm btn-outline-primary me-2" href="{{ url_for('admin_products') }}">Admin dashboard</a>
+          <a class="btn btn-sm btn-outline-danger me-2" href="{{ url_for('admin_logout') }}">Admin logout</a>
         {% else %}
-          <a class="btn btn-sm btn-outline-primary" href="{{ url_for('login') }}">Admin login</a>
+          <a class="btn btn-sm btn-outline-secondary me-2" href="{{ url_for('admin_login') }}">Admin login</a>
+        {% endif %}
+
+        {# Customer account area: register / login or customer name + logout #}
+        {% if session.get('customer_name') %}
+          <span class="me-2 small text-muted">Hello, {{ session.get('customer_name') }}</span>
+          <a class="btn btn-sm btn-outline-danger" href="{{ url_for('logout') }}">Logout</a>
+        {% else %}
+          <a class="btn btn-sm btn-outline-secondary me-2" href="{{ url_for('register') }}">Register</a>
+          <a class="btn btn-sm btn-primary" href="{{ url_for('login') }}">Login</a>
         {% endif %}
       </div>
     </div>

@@ -18,14 +18,39 @@ PRIVATE_UPLOADS.mkdir(parents=True, exist_ok=True)
 
 app.secret_key = os.environ.get("FLASK_SECRET", "dev-secret-please-change")
 
-# simple login_required decorator
+# simple login_required decorator (admin-only)
 def login_required(f):
     @wraps(f)
     def wrapped(*args, **kwargs):
         if not session.get("is_admin"):
-            return redirect(url_for("login", next=request.path))
+            return redirect(url_for("admin_login", next=request.path))
         return f(*args, **kwargs)
     return wrapped
+
+# Admin login/logout routes
+@app.route("/admin/login", methods=["GET", "POST"])
+def admin_login():
+    if request.method == "GET":
+        return render_template("admin_login.html")
+    username = (request.form.get("username") or "").strip()
+    password = (request.form.get("password") or "").strip()
+    ADMIN_USER = os.environ.get("ADMIN_USER", "admin")
+    ADMIN_PASS = os.environ.get("ADMIN_PASS", "password")
+    if username == ADMIN_USER and password == ADMIN_PASS:
+        session["is_admin"] = True
+        session["admin_user"] = username
+        flash("Admin logged in.", "success")
+        next_url = request.args.get("next") or url_for("admin_products")
+        return redirect(next_url)
+    flash("Invalid admin credentials.", "danger")
+    return redirect(url_for("admin_login"))
+
+@app.route("/admin/logout")
+def admin_logout():
+    session.pop("is_admin", None)
+    session.pop("admin_user", None)
+    flash("Admin logged out.", "info")
+    return redirect(url_for("index"))
 
 def get_db():
     """Return a sqlite3.Connection (row factory set) stored in flask.g"""
@@ -582,6 +607,7 @@ def checkout():
         session.pop("cart", None)
         if session.get("customer_id"):
             save_customer_cart(session["customer_id"], {})
+
         flash("Order placed. Thank you!", "success")
         return redirect(url_for("order_success", order_id=order_id))
     except Exception as e:
@@ -693,6 +719,26 @@ def admin_order_detail(order_id):
         (order_id,)
     ).fetchall()
     return render_template("admin_order_detail.html", order=order, items=items)
+
+@app.route("/cart/remove", methods=["POST"])
+def cart_remove():
+    """Remove an SKU from the session cart (template calls url_for('cart_remove'))."""
+    sku = (request.form.get("sku") or "").strip().upper()
+    if not sku:
+        return redirect(request.referrer or url_for("cart_view"))
+
+    cart = _cart_get()
+    if sku in cart:
+        cart.pop(sku, None)
+        _cart_set(cart)
+        # persist change if customer is logged in
+        try:
+            save_cart_if_logged_in()
+        except Exception:
+            # silent fail-safe if persistence helpers removed/absent
+            pass
+        flash("Removed from cart.", "success")
+    return redirect(request.referrer or url_for("cart_view"))
 
 if __name__ == "__main__":
     # ensure DB schema has the required order columns before serving
