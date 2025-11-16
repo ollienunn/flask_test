@@ -5,6 +5,10 @@ from datetime import datetime
 import re
 from werkzeug.utils import secure_filename
 import os
+import smtplib
+import ssl
+from email.message import EmailMessage
+from flask import current_app
 import sqlite3
 from flask import g, send_from_directory, abort
 from functools import wraps
@@ -610,6 +614,22 @@ def checkout():
         if session.get("customer_id"):
             save_customer_cart(session["customer_id"], {})
 
+        # send confirmation email (try official_email first, then logged-in customer email)
+        recipient = official_email or None
+        recipient_name = authorized_officer or session.get("customer_name")
+        if not recipient and session.get("customer_id"):
+            cur = db.execute("SELECT email, name FROM customers WHERE id = ?", (session["customer_id"],)).fetchone()
+            if cur:
+                recipient = cur["email"]
+                recipient_name = cur["name"]
+
+        if recipient:
+            try:
+                send_order_confirmation_email(recipient, recipient_name, order_id, items, total)
+            except Exception:
+                # swallow email exceptions so checkout flow is not blocked
+                current_app.logger.exception("Unexpected error sending confirmation email")
+
         flash("Order placed. Thank you!", "success")
         return redirect(url_for("order_success", order_id=order_id))
     except Exception as e:
@@ -746,6 +766,65 @@ def cart_remove():
 def service_worker():
     # serve the static service worker file at site root so its scope is '/'
     return send_from_directory(app.static_folder, "sw.js", mimetype="application/javascript")
+
+def send_order_confirmation_email(to_email, recipient_name, order_id, items, total):
+    """Send a simple order confirmation email via SMTP. Returns True on success."""
+    SMTP_HOST = os.environ.get("SMTP_HOST")
+    if not SMTP_HOST:
+        # SMTP not configured
+        current_app.logger.debug("SMTP_HOST not set, skipping email.")
+        return False
+
+    SMTP_PORT = int(os.environ.get("SMTP_PORT", 587))
+    SMTP_USER = os.environ.get("SMTP_USER")
+    SMTP_PASS = os.environ.get("SMTP_PASS")
+    FROM_EMAIL = os.environ.get("FROM_EMAIL", SMTP_USER or "no-reply@example.com")
+
+    msg = EmailMessage()
+    msg["Subject"] = f"Order #{order_id} placed"
+    msg["From"] = FROM_EMAIL
+    msg["To"] = to_email
+
+    # Plain text body
+    lines = [f"Hello {recipient_name or ''},", "", f"Your order #{order_id} has been placed.", "", "Order details:"]
+    for it in (items or []):
+        lines.append(f"- {it.get('qty',0)} x {it.get('name','')} — ${float(it.get('subtotal',0)):.2f}")
+    lines.append("")
+    lines.append(f"Total: ${float(total):.2f}")
+    lines.append("")
+    lines.append("Thank you for your order.")
+    plain = "\n".join(lines)
+
+    # Simple HTML body
+    html_items = "".join(f"<li>{it.get('qty',0)} × {it.get('name','')} — ${float(it.get('subtotal',0)):.2f}</li>" for it in (items or []))
+    html = f"""
+    <html>
+      <body>
+        <p>Hello {recipient_name or ''},</p>
+        <p>Your order <strong>#{order_id}</strong> has been placed.</p>
+        <p>Order details:</p>
+        <ul>{html_items}</ul>
+        <p><strong>Total: ${float(total):.2f}</strong></p>
+        <p>Thank you for your order.</p>
+      </body>
+    </html>
+    """
+
+    msg.set_content(plain)
+    msg.add_alternative(html, subtype="html")
+
+    context = ssl.create_default_context()
+    try:
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=20) as server:
+            server.starttls(context=context)
+            if SMTP_USER and SMTP_PASS:
+                server.login(SMTP_USER, SMTP_PASS)
+            server.send_message(msg)
+        current_app.logger.debug("Order confirmation email sent to %s", to_email)
+        return True
+    except Exception as e:
+        current_app.logger.exception("Failed to send order confirmation email: %s", e)
+        return False
 
 if __name__ == "__main__":
     # ensure DB schema has the required order columns before serving
