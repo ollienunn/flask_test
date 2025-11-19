@@ -9,7 +9,6 @@ import smtplib
 import ssl
 from email.message import EmailMessage
 from flask import current_app
-import sqlite3
 from flask import g, send_from_directory, abort
 from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash

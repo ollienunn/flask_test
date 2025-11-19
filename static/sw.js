@@ -5,8 +5,8 @@ const PRECACHE_URLS = [
   '/products',
   '/static/css/styles.css',
   '/static/images/logo.png',
-  '/static/images/logo-192.png',
-  '/static/images/logo-512.png',
+  '/static/images/Logo (2).png',
+  '/static/images/Logo (1).png',
   '/static/manifest.json'
 ];
 
@@ -56,7 +56,7 @@ self.addEventListener('fetch', (event) => {
       }).catch(() => {
         // image fallback
         if (req.destination === 'image') {
-          return caches.match('/static/images/logo-192.png');
+          return caches.match('/static/images/Logo (2).png');
         }
         return new Response('Offline', { status: 503, statusText: 'Offline' });
       });
