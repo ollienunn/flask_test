@@ -598,6 +598,20 @@ def checkout():
 
         # prepare order insert with government fields
         created_at = datetime.utcnow().isoformat()
+
+        # --- encrypt sensitive fields (requires DATA_ENC_KEY env var) ---
+        contact_number_enc = encrypt_field(contact_number)
+        position_clearance_enc = encrypt_field(position_clearance)
+        po_number_enc = encrypt_field(po_number)
+        contract_reference_enc = encrypt_field(contract_reference)
+        funding_source_enc = encrypt_field(funding_source)
+        delivery_location_enc = encrypt_field(delivery_location)
+        payment_method_enc = encrypt_field(payment_method)
+        agency_enc = encrypt_field(agency)
+        authorized_officer_enc = encrypt_field(authorized_officer)
+        # NOTE: keep official_email plaintext so emails can be sent
+        # ----------------------------------------------------------------
+
         order_cols = ["customer_id", "total", "status", "created_at",
                       "agency", "authorized_officer", "official_email", "position_clearance", "contact_number",
                       "po_number", "contract_reference", "funding_source",
@@ -605,10 +619,10 @@ def checkout():
                       "delivery_location", "required_delivery_date", "payment_method",
                       "declaration_agreed", "digital_signature"]
         order_vals = [customer_id, total, "placed", created_at,
-                      agency, authorized_officer, official_email, position_clearance, contact_number,
-                      po_number, contract_reference, funding_source,
+                      agency_enc, authorized_officer_enc, official_email, position_clearance_enc, contact_number_enc,
+                      po_number_enc, contract_reference_enc, funding_source_enc,
                       auth_doc_path, vendor_id, end_user_cert_path, export_license_status,
-                      delivery_location, required_delivery_date, payment_method,
+                      delivery_location_enc, required_delivery_date, payment_method_enc,
                       int(declaration), digital_sig_path]
 
         placeholders = ",".join("?" for _ in order_cols)
@@ -754,6 +768,19 @@ def admin_order_detail(order_id):
         "SELECT oi.quantity, oi.unit_price, p.name FROM order_items oi JOIN products p ON oi.product_id = p.id WHERE oi.order_id = ?",
         (order_id,)
     ).fetchall()
+
+    # decrypt sensitive fields for admin display (if DATA_ENC_KEY provided)
+    if order:
+        order = dict(order)
+        _to_decrypt = [
+            "agency", "authorized_officer", "position_clearance", "contact_number",
+            "po_number", "contract_reference", "funding_source", "delivery_location", "payment_method"
+        ]
+        for f in _to_decrypt:
+            val = order.get(f)
+            # provide decrypted value in a separate key to avoid accidental overwrite
+            order[f + "_decrypted"] = decrypt_field(val) if val else None
+
     return render_template("admin_order_detail.html", order=order, items=items)
 
 @app.route("/cart/remove", methods=["POST"])
