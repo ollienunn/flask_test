@@ -13,13 +13,28 @@ from flask import g, send_from_directory, abort
 from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
 import json
+from cryptography.fernet import Fernet
 
 app = Flask(__name__)
 DB_PATH = Path(__file__).parent / "store.db"
 PRIVATE_UPLOADS = Path(__file__).parent / "private_uploads"
 PRIVATE_UPLOADS.mkdir(parents=True, exist_ok=True)
 
-app.secret_key = os.environ.get("FLASK_SECRET", "dev-secret-please-change")
+app.secret_key = os.environ.get("FLASK_SECRET", "CheeseSauce")
+
+# load key from env: set DATA_ENC_KEY to a base64 Fernet key (generate below)
+DATA_ENC_KEY = os.environ.get("DATA_ENC_KEY")
+fernet = Fernet(DATA_ENC_KEY.encode()) if DATA_ENC_KEY else None
+
+def encrypt_field(plaintext: str) -> str | None:
+    if plaintext is None or fernet is None:
+        return None
+    return fernet.encrypt(plaintext.encode()).decode()
+
+def decrypt_field(token: str) -> str | None:
+    if token is None or fernet is None:
+        return None
+    return fernet.decrypt(token.encode()).decode()
 
 # simple login_required decorator (admin-only)
 def login_required(f):
