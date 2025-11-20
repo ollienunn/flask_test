@@ -2,185 +2,107 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Admin — Order #{{ order.id }}</title>
+  <title>Order #{{ order.id }} — Admin</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
-
-<!-- PWA: manifest, favicon and theme colour -->
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
   <link rel="icon" href="{{ url_for('static', filename='images/logo.png') }}" type="image/png">
   <meta name="theme-color" content="#0b3d2e">
-
 </head>
 <body>
   {% include 'navbar.html' %}
 
-  <main class="container py-4">
-    <div class="d-flex justify-content-between align-items-start mb-3">
-      <div>
-        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('admin_orders') }}">&larr; Back to orders</a>
-        <h4 class="d-inline-block ms-3 fw-bold">Order #{{ order.id }}</h4>
-      </div>
-      <div class="text-end">
-        <div class="small text-muted">Placed: {{ order.created_at }}</div>
-        <div class="h5 mt-1 text-primary fw-semibold">${{ "{:,.2f}".format(order.total) }}</div>
-        {% set s = order.status or '' %}
-        {% if s %}
-          <div class="mt-2">
-            {% if s == 'placed' %}<span class="badge bg-primary">{{ s }}</span>
-            {% elif s == 'processing' %}<span class="badge bg-info text-dark">{{ s }}</span>
-            {% elif s == 'shipped' %}<span class="badge bg-secondary">{{ s }}</span>
-            {% elif s == 'completed' %}<span class="badge bg-success">{{ s }}</span>
-            {% elif s == 'cancelled' %}<span class="badge bg-danger">{{ s }}</span>
-            {% else %}<span class="badge bg-secondary">{{ s }}</span>{% endif %}
-          </div>
-        {% endif %}
-      </div>
-    </div>
+  <main class="container py-5">
+    <h3 class="mb-3">Order #{{ order.id }}</h3>
 
-    <div class="row g-4">
-      <div class="col-lg-8">
-        <div class="card shadow-sm mb-3">
-          <div class="card-header bg-dark text-white"><strong>Government / Procurement Details</strong></div>
+    <div class="row">
+      <div class="col-md-8">
+        <div class="card mb-4">
           <div class="card-body">
-            <dl class="row mb-0">
-              <dt class="col-sm-4 text-muted">Agency</dt><dd class="col-sm-8">{{ order.agency or '—' }}</dd>
-              <dt class="col-sm-4 text-muted">Authorized officer</dt><dd class="col-sm-8">{{ order.authorized_officer or '—' }}</dd>
-              <dt class="col-sm-4 text-muted">Official email</dt><dd class="col-sm-8">{{ order.official_email or '—' }}</dd>
-              <dt class="col-sm-4 text-muted">PO / Contract</dt><dd class="col-sm-8">{{ order.po_number or '—' }} / {{ order.contract_reference or '—' }}</dd>
-              <dt class="col-sm-4 text-muted">Vendor ID</dt><dd class="col-sm-8">{{ order.vendor_id or '—' }}</dd>
-              <dt class="col-sm-4 text-muted">Delivery</dt><dd class="col-sm-8">{{ order.delivery_location or '—' }}<br><small class="text-muted">{{ order.required_delivery_date or '—' }}</small></dd>
-              <dt class="col-sm-4 text-muted">Declaration</dt><dd class="col-sm-8">{{ 'Yes' if order.declaration_agreed else 'No' }}</dd>
+            <h6 class="card-title">Customer</h6>
+            <p class="mb-1"><strong>Name:</strong> {{ order.customer_name or order.customer_name }}</p>
+            <p class="mb-1"><strong>Email:</strong> {{ order.customer_email or '—' }}</p>
+            <p class="mb-0"><strong>Placed:</strong> {{ order.created_at or order.order_created or '—' }}</p>
+          </div>
+        </div>
+
+        <div class="card mb-4">
+          <div class="card-body">
+            <h6 class="card-title">Order details</h6>
+
+            <dl class="row">
+              <dt class="col-sm-4">Agency</dt>
+              <dd class="col-sm-8">{{ order.get('agency_decrypted') or order.get('agency') or '—' }}</dd>
+
+              <dt class="col-sm-4">Authorized officer</dt>
+              <dd class="col-sm-8">{{ order.get('authorized_officer_decrypted') or order.get('authorized_officer') or '—' }}</dd>
+
+              <dt class="col-sm-4">Position / clearance</dt>
+              <dd class="col-sm-8">{{ order.get('position_clearance_decrypted') or order.get('position_clearance') or '—' }}</dd>
+
+              <dt class="col-sm-4">Contact number</dt>
+              <dd class="col-sm-8">{{ order.get('contact_number_decrypted') or order.get('contact_number') or '—' }}</dd>
+
+              <dt class="col-sm-4">PO number</dt>
+              <dd class="col-sm-8">{{ order.get('po_number_decrypted') or order.get('po_number') or '—' }}</dd>
+
+              <dt class="col-sm-4">Contract reference</dt>
+              <dd class="col-sm-8">{{ order.get('contract_reference_decrypted') or order.get('contract_reference') or '—' }}</dd>
+
+              <dt class="col-sm-4">Funding source</dt>
+              <dd class="col-sm-8">{{ order.get('funding_source_decrypted') or order.get('funding_source') or '—' }}</dd>
+
+              <dt class="col-sm-4">Delivery location</dt>
+              <dd class="col-sm-8">{{ order.get('delivery_location_decrypted') or order.get('delivery_location') or '—' }}</dd>
+
+              <dt class="col-sm-4">Payment method</dt>
+              <dd class="col-sm-8">{{ order.get('payment_method_decrypted') or order.get('payment_method') or '—' }}</dd>
+
+              <dt class="col-sm-4">Official email</dt>
+              <dd class="col-sm-8">{{ order.official_email or '—' }}</dd>
             </dl>
           </div>
         </div>
 
-        <div class="card shadow-sm mb-3">
-          <div class="card-header bg-light"><strong>Items</strong></div>
-          <div class="card-body p-0">
+        <div class="card">
+          <div class="card-body">
+            <h6 class="card-title">Items</h6>
             <ul class="list-group list-group-flush">
               {% for it in items %}
                 <li class="list-group-item d-flex justify-content-between align-items-center">
                   <div>
-                    <div class="fw-semibold">{{ it["name"] }}</div>
-                    <div class="small text-muted">Quantity: {{ it["quantity"] }} · Unit: ${{ "{:,.2f}".format(it["unit_price"]) }}</div>
+                    <div class="fw-semibold">{{ it.name }}</div>
+                    <div class="small text-muted">Qty: {{ it.quantity }} • Unit: ${{ "{:,.2f}".format(it.unit_price) }}</div>
                   </div>
-                  <div class="fw-semibold">${{ "{:,.2f}".format(it["unit_price"] * it["quantity"]) }}</div>
+                  <div class="fw-semibold">${{ "{:,.2f}".format(it.quantity * it.unit_price) }}</div>
                 </li>
               {% endfor %}
             </ul>
           </div>
         </div>
-
-        <div class="card shadow-sm">
-          <div class="card-header bg-light"><strong>Uploaded documents (admin only)</strong></div>
-          <div class="card-body">
-            <div class="d-flex flex-column gap-2">
-              {% if order.auth_doc %}
-                <a class="btn btn-outline-primary btn-sm w-100 text-start" href="{{ url_for('admin_download_upload', filename=order.auth_doc) }}">Authorization Document</a>
-              {% endif %}
-              {% if order.end_user_cert %}
-                <a class="btn btn-outline-primary btn-sm w-100 text-start" href="{{ url_for('admin_download_upload', filename=order.end_user_cert) }}">End-User Certificate</a>
-              {% endif %}
-              {% if order.digital_signature %}
-                <a class="btn btn-outline-primary btn-sm w-100 text-start" href="{{ url_for('admin_download_upload', filename=order.digital_signature) }}">Digital Signature</a>
-              {% endif %}
-              {% if not (order.auth_doc or order.end_user_cert or order.digital_signature) %}
-                <div class="text-muted small">No uploaded documents</div>
-              {% endif %}
-            </div>
-          </div>
-        </div>
       </div>
 
-      <div class="col-lg-4">
-        <div class="card shadow-sm mb-3">
-          <div class="card-header bg-light"><strong>Manage Order</strong></div>
-          <div class="card-body">
-            <form method="post" class="row g-2">
-              <div>
-                <label class="form-label small">Export license status</label>
-                <select name="export_license_status" class="form-select mb-2">
-                  <option value="" {% if not order.export_license_status %}selected{% endif %}>(unset)</option>
-                  <option {% if order.export_license_status=='Pending' %}selected{% endif %}>Pending</option>
-                  <option {% if order.export_license_status=='Approved' %}selected{% endif %}>Approved</option>
-                  <option {% if order.export_license_status=='Exempt' %}selected{% endif %}>Exempt</option>
-                </select>
-              </div>
-
-              <div>
-                <label class="form-label small">Order status</label>
-                <select name="status" class="form-select mb-3">
-                  <option {% if order.status=='placed' %}selected{% endif %}>placed</option>
-                  <option {% if order.status=='processing' %}selected{% endif %}>processing</option>
-                  <option {% if order.status=='shipped' %}selected{% endif %}>shipped</option>
-                  <option {% if order.status=='completed' %}selected{% endif %}>completed</option>
-                  <option {% if order.status=='cancelled' %}selected{% endif %}>cancelled</option>
-                </select>
-              </div>
-
-              <div class="d-grid mb-2">
-                <button class="btn btn-primary">Save changes</button>
-              </div>
-
-              <div class="d-grid">
-                <a href="{{ url_for('admin_orders') }}" class="btn btn-outline-secondary">Back to orders</a>
-              </div>
-            </form>
-          </div>
-        </div>
-
+      <div class="col-md-4">
         <div class="card shadow-sm">
-          <div class="card-body text-center">
-            <div class="small text-muted">Customer</div>
-            <div class="fw-semibold">{{ order.customer_name or '—' }}</div>
-            <div class="small text-muted">{{ order.customer_email or '—' }}</div>
-            <hr>
-            <div class="small text-muted">Order ID</div>
-            <div class="fw-bold">{{ order.id }}</div>
-            <div class="small text-muted mt-2">Created</div>
-            <div class="text-muted small">{{ order.created_at }}</div>
+          <div class="card-body">
+            <h6 class="card-title">Summary</h6>
+            <p class="mb-1"><strong>Total:</strong> ${{ "{:,.2f}".format(order.total or 0) }}</p>
+            <p class="mb-1"><strong>Status:</strong> {{ order.status }}</p>
+            <a href="{{ url_for('admin_orders') }}" class="btn btn-sm btn-outline-secondary mt-3">Back to orders</a>
           </div>
         </div>
       </div>
     </div>
+
   </main>
 
-  <!-- Footer -->
-  <footer class="bg-light border-top py-4 mt-5">
+  <footer class="site-footer border-top py-4 mt-5">
     <div class="container text-center">
       <p class="mb-1">&copy; 2025 Webstore — MachZero</p>
-      <small class="text-muted">Contact: <a href="mailto:info@example.com">info@example.com</a></small>
     </div>
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
-
-<footer>
-  <div class="container">
-    &copy; {{ 2025 }} Webstore — MachZero.
-  </div>
-</footer>
-
-<script>
-  // read ?selected=... and highlight + scroll that product into view
-  document.addEventListener('DOMContentLoaded', function () {
-    const params = new URLSearchParams(window.location.search);
-    const selected = params.get('selected');
-    if (!selected) return;
-    const el = document.getElementById('product-' + selected);
-    if (!el) return;
-    // small delay so page renders then perform smooth scroll + highlight
-    setTimeout(function () {
-      el.classList.add('product-highlight');
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      // ensure pronounced focus for keyboard users
-      el.setAttribute('tabindex', '-1');
-      el.focus({ preventScroll: true });
-    }, 180);
-  });
-</script>
-
 </html>
