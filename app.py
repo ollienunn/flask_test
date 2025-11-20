@@ -578,6 +578,7 @@ def checkout():
     end_user_cert_path = None
     digital_sig_path = digital_sig_name
 
+
     try:
         db.execute("BEGIN")
         # Re-check stock availability inside transaction
