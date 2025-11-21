@@ -13,7 +13,9 @@ from flask import g, send_from_directory, abort
 from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
 import json
+from dotenv import load_dotenv
 from cryptography.fernet import Fernet
+import os
 
 app = Flask(__name__)
 DB_PATH = Path(__file__).parent / "store.db"
@@ -22,17 +24,21 @@ PRIVATE_UPLOADS.mkdir(parents=True, exist_ok=True)
 
 app.secret_key = os.environ.get("FLASK_SECRET", "CheeseSauce")
 
-# load key from env: set DATA_ENC_KEY to a base64 Fernet key (generate below)
+load_dotenv()  # optional: loads .env into os.environ for local dev
+
+# DATA_ENC_KEY should be a base64 Fernet key (you already set it with setx)
 DATA_ENC_KEY = os.environ.get("DATA_ENC_KEY")
 fernet = Fernet(DATA_ENC_KEY.encode()) if DATA_ENC_KEY else None
 
-def encrypt_field(plaintext: str) -> str | None:
-    if plaintext is None or fernet is None:
+def encrypt_field(plaintext):
+    """Return Fernet token (str) or None if not available/empty."""
+    if not plaintext or fernet is None:
         return None
-    return fernet.encrypt(plaintext.encode()).decode()
+    return fernet.encrypt(str(plaintext).encode()).decode()
 
-def decrypt_field(token: str) -> str | None:
-    if token is None or fernet is None:
+def decrypt_field(token):
+    """Return decrypted plaintext (str) or None on failure."""
+    if not token or fernet is None:
         return None
     return fernet.decrypt(token.encode()).decode()
 
@@ -579,6 +585,23 @@ def checkout():
     digital_sig_path = digital_sig_name
 
 
+    # --- in your checkout POST handler, after you collect form fields ---
+    # prevent saving orders without encryption key (avoids NULLs)
+    if fernet is None:
+        flash("Server encryption key (DATA_ENC_KEY) not configured — cannot place order. Contact admin.", "danger")
+        return redirect(url_for("checkout"))
+
+    # encrypt the sensitive fields (official_email left plaintext so emails still work)
+    agency_enc = encrypt_field(agency)
+    authorized_officer_enc = encrypt_field(authorized_officer)
+    position_clearance_enc = encrypt_field(position_clearance)
+    contact_number_enc = encrypt_field(contact_number)
+    po_number_enc = encrypt_field(po_number)
+    contract_reference_enc = encrypt_field(contract_reference)
+    funding_source_enc = encrypt_field(funding_source)
+    delivery_location_enc = encrypt_field(delivery_location)
+    payment_method_enc = encrypt_field(payment_method)
+
     try:
         db.execute("BEGIN")
         # Re-check stock availability inside transaction
@@ -599,19 +622,6 @@ def checkout():
 
         # prepare order insert with government fields
         created_at = datetime.utcnow().isoformat()
-
-        # --- encrypt sensitive fields (requires DATA_ENC_KEY env var) ---
-        contact_number_enc = encrypt_field(contact_number)
-        position_clearance_enc = encrypt_field(position_clearance)
-        po_number_enc = encrypt_field(po_number)
-        contract_reference_enc = encrypt_field(contract_reference)
-        funding_source_enc = encrypt_field(funding_source)
-        delivery_location_enc = encrypt_field(delivery_location)
-        payment_method_enc = encrypt_field(payment_method)
-        agency_enc = encrypt_field(agency)
-        authorized_officer_enc = encrypt_field(authorized_officer)
-        # NOTE: keep official_email plaintext so emails can be sent
-        # ----------------------------------------------------------------
 
         order_cols = ["customer_id", "total", "status", "created_at",
                       "agency", "authorized_officer", "official_email", "position_clearance", "contact_number",
@@ -778,9 +788,14 @@ def admin_order_detail(order_id):
             "po_number", "contract_reference", "funding_source", "delivery_location", "payment_method"
         ]
         for f in _to_decrypt:
-            val = order.get(f)
-            # provide decrypted value in a separate key to avoid accidental overwrite
-            order[f + "_decrypted"] = decrypt_field(val) if val else None
+            token = order.get(f)
+            order[f + "_encrypted"] = token  # useful for debugging if decrypt fails
+            try:
+                order[f + "_decrypted"] = decrypt_field(token) if token else None
+            except Exception as e:
+                # safe fallback: log and leave decrypted as None so template can show fallback
+                current_app.logger.exception("Failed to decrypt order %s field %s: %s", order.get("id"), f, e)
+                order[f + "_decrypted"] = None
 
     return render_template("admin_order_detail.html", order=order, items=items)
 
@@ -867,6 +882,35 @@ def send_order_confirmation_email(to_email, recipient_name, order_id, items, tot
     except Exception as e:
         current_app.logger.exception("Failed to send order confirmation email: %s", e)
         return False
+
+@app.route("/admin/debug")
+@login_required
+def admin_debug():
+    """
+    Simple debug endpoint to verify the DATA_ENC_KEY / Fernet availability.
+    Returns JSON:
+      - DATA_ENC_KEY_set: whether the env var exists
+      - fernet_init: whether Fernet() could be instantiated (boolean)
+      - fernet_test_decrypt_ok: whether a local encrypt/decrypt round-trip succeeded
+      - error: optional error message if Fernet init failed
+    """
+    key = os.environ.get("DATA_ENC_KEY")
+    result = {"DATA_ENC_KEY_set": bool(key)}
+    if not key:
+        return jsonify(result)
+
+    try:
+        f = Fernet(key.encode())
+        result["fernet_init"] = True
+        # do a safe local round-trip to ensure the key works (does not touch DB)
+        token = f.encrypt(b"__debug__").decode()
+        ok = (f.decrypt(token.encode()).decode() == "__debug__")
+        result["fernet_test_decrypt_ok"] = bool(ok)
+    except Exception as e:
+        result["fernet_init"] = False
+        result["error"] = str(e)
+
+    return jsonify(result)
 
 if __name__ == "__main__":
     # ensure DB schema has the required order columns before serving
