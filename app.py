@@ -1,4 +1,4 @@
-from flask import Flask, render_template, g, request, redirect, url_for, jsonify, session, flash
+from flask import Flask, render_template, g, request, redirect, url_for, jsonify, session, flash, render_template_string
 import sqlite3
 from pathlib import Path
 from datetime import datetime, timezone
@@ -507,6 +507,46 @@ def cart_view():
             })
 
     return render_template("cart.html", items=items, total=total)
+
+
+TEACHER_EGG_CODE = os.environ.get("TEACHER_EGG_CODE", "Fonganator")
+
+@app.route("/easter-egg", methods=["GET"])
+def easter_egg():
+    """
+    Hidden easter-egg: teacher can visit /easter-egg?code=<secret>
+    If the code matches TEACHER_EGG_CODE, mark session and show a small secret message.
+    Returns 404 when code is not provided or incorrect to remain hidden.
+    """
+    code = (request.args.get("code") or "").strip()
+    if not code or code != TEACHER_EGG_CODE:
+        # intentionally return 404 so the endpoint is stealthy
+        return ("", 404)
+
+    # mark found in session so pages can optionally show a badge for the teacher
+    session["found_easter_egg"] = True
+    secret_html = """
+    <!doctype html>
+    <html lang="en"><head><meta charset="utf-8"><title>Secret Found</title>
+    <style>body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:48px;color:#0b3d2e} .box{border:2px dashed #9db89a;padding:24px;border-radius:8px;background:#f6fbf2}</style>
+    </head><body>
+    <div class="box">
+      <h2>🎉 Secret found!</h2>
+      <p>Nice work — the easter egg is active for this session.</p>
+      <p><strong>Teacher note:</strong> you can now see the <code>found_easter_egg</code> flag in your session.</p>
+      <p style="margin-top:12px;"><a href="/snake" style="display:inline-block;padding:8px 12px;background:#0b3d2e;color:#fff;border-radius:6px;text-decoration:none;">Play Snake</a></p>
+      <p style="font-family:monospace;background:#fff;padding:6px;border-radius:4px;display:inline-block;margin-top:8px;">Keep smiling, CS Teacher!</p>
+    </div>
+    </body></html>
+    """
+    return render_template_string(secret_html)
+
+@app.route("/snake")
+def snake():
+    # require easter-egg flag in session
+    if not session.get("found_easter_egg"):
+        return ("", 404)
+    return render_template("snake.html")
 
 # ---------- Checkout route (government) ----------
 @app.route("/checkout", methods=["GET", "POST"])
