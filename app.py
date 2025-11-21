@@ -762,39 +762,63 @@ def admin_orders():
 @login_required
 def admin_order_detail(order_id):
     db = get_db()
+
+    # Handle updates from the admin form
     if request.method == "POST":
-        # update export license status and optionally order status
-        export_status = request.form.get("export_license_status")
-        order_status = request.form.get("status")
-        db.execute("UPDATE orders SET export_license_status = ?, status = ? WHERE id = ?", (export_status, order_status, order_id))
+        status = (request.form.get("status") or "").strip()
+        export_status = (request.form.get("export_status") or "").strip()
+
+        # basic validation of allowed values
+        allowed_status = {"placed", "processing", "shipped", "cancelled"}
+        allowed_export = {"approved", "exempt", "processing", "pending"}
+
+        if status not in allowed_status:
+            flash("Invalid order status.", "danger")
+            return redirect(url_for("admin_order_detail", order_id=order_id))
+        if export_status not in allowed_export:
+            flash("Invalid export status.", "danger")
+            return redirect(url_for("admin_order_detail", order_id=order_id))
+
+        db.execute(
+            "UPDATE orders SET status = ?, export_license_status = ? WHERE id = ?",
+            (status, export_status, order_id),
+        )
         db.commit()
         flash("Order updated.", "success")
         return redirect(url_for("admin_order_detail", order_id=order_id))
 
     order = db.execute(
         "SELECT o.*, c.name AS customer_name, c.email AS customer_email FROM orders o LEFT JOIN customers c ON o.customer_id = c.id WHERE o.id = ?",
-        (order_id,)
+        (order_id,),
     ).fetchone()
     items = db.execute(
         "SELECT oi.quantity, oi.unit_price, p.name FROM order_items oi JOIN products p ON oi.product_id = p.id WHERE oi.order_id = ?",
-        (order_id,)
+        (order_id,),
     ).fetchall()
 
     # decrypt sensitive fields for admin display (if DATA_ENC_KEY provided)
     if order:
         order = dict(order)
         _to_decrypt = [
-            "agency", "authorized_officer", "position_clearance", "contact_number",
-            "po_number", "contract_reference", "funding_source", "delivery_location", "payment_method"
+            "agency",
+            "authorized_officer",
+            "position_clearance",
+            "contact_number",
+            "po_number",
+            "contract_reference",
+            "funding_source",
+            "delivery_location",
+            "payment_method",
         ]
         for f in _to_decrypt:
             token = order.get(f)
-            order[f + "_encrypted"] = token  # useful for debugging if decrypt fails
+            order[f + "_encrypted"] = token
             try:
                 order[f + "_decrypted"] = decrypt_field(token) if token else None
             except Exception as e:
-                # safe fallback: log and leave decrypted as None so template can show fallback
-                current_app.logger.exception("Failed to decrypt order %s field %s: %s", order.get("id"), f, e)
+                current_app.logger.exception(
+                    "Failed to decrypt order %s field %s: %s", order.get("id"), f, e
+                )
                 order[f + "_decrypted"] = None
 
     return render_template("admin_order_detail.html", order=order, items=items)

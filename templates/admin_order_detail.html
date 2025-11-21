@@ -89,7 +89,39 @@
             <h6 class="card-title">Summary</h6>
             <p class="mb-1"><strong>Total:</strong> ${{ "{:,.2f}".format(order.total or 0) }}</p>
             <p class="mb-1"><strong>Status:</strong> {{ order.status }}</p>
-            <a href="{{ url_for('admin_orders') }}" class="btn btn-sm btn-outline-secondary mt-3">Back to orders</a>
+            <p class="mb-1"><strong>Export/license status:</strong> {{ order.export_license_status or 'pending' }}</p>
+
+            <form method="post" class="mt-3">
+              <div class="mb-2">
+                <label class="form-label small">Order status</label>
+                <select name="status" class="form-select form-select-sm">
+                  {% set cur = order.status or 'placed' %}
+                  <option value="placed" {{ 'selected' if cur=='placed' else '' }}>placed</option>
+                  <option value="processing" {{ 'selected' if cur=='processing' else '' }}>processing</option>
+                  <option value="shipped" {{ 'selected' if cur=='shipped' else '' }}>shipped</option>
+                  <option value="cancelled" {{ 'selected' if cur=='cancelled' else '' }}>cancelled</option>
+                </select>
+              </div>
+
+              <div class="mb-2">
+                <label class="form-label small">Export / license</label>
+                <select name="export_status" class="form-select form-select-sm">
+                  {% set ex = order.export_license_status or 'pending' %}
+                  <option value="pending" {{ 'selected' if ex=='pending' else '' }}>pending</option>
+                  <option value="processing" {{ 'selected' if ex=='processing' else '' }}>processing</option>
+                  <option value="approved" {{ 'selected' if ex=='approved' else '' }}>approved</option>
+                  <option value="exempt" {{ 'selected' if ex=='exempt' else '' }}>exempt</option>
+                </select>
+              </div>
+
+              <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-sm btn-primary">Save changes</button>
+                <a href="{{ url_for('admin_orders') }}" class="btn btn-sm btn-outline-secondary">Back to orders</a>
+              </div>
+            </form>
+
+            <!-- existing back button kept for safety -->
+            <!-- <a href="{{ url_for('admin_orders') }}" class="btn btn-sm btn-outline-secondary mt-3">Back to orders</a> -->
           </div>
         </div>
       </div>
