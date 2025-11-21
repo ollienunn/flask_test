@@ -77,7 +77,6 @@ def admin_login():
 def admin_logout():
     # fully clear session on admin logout to avoid stale flags
     session.clear()
-    flash("Admin logged out.", "info")
     return redirect(url_for("index"))
 
 def get_db():
@@ -365,6 +364,12 @@ def register():
     name = (request.form.get("name") or "").strip()
     email = (request.form.get("email") or "").strip().lower()
     password = request.form.get("password") or ""
+
+    # password policy: >8 chars (min 9), at least 1 lower, 1 upper, and 1 digit
+    pwd_pattern = re.compile(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{9,}$')
+    if not pwd_pattern.match(password):
+        flash("Password must be at greater than 8 characters and include one uppercase letter, one lowercase letter and one number.", "danger")
+        return redirect(url_for("register"))
     if not email or not password or not name:
         flash("Name, email and password required.", "danger")
         return redirect(url_for("register"))
@@ -385,7 +390,6 @@ def register():
     # if there is a session cart, save it to DB
     if session.get("cart"):
         save_customer_cart(session["customer_id"], session["cart"])
-    flash("Registration complete. Logged in.", "success")
     return redirect(url_for("products"))
 
 @app.route("/login", methods=["GET", "POST"])
@@ -1062,6 +1066,15 @@ def debug_session():
         abort(403)
     # convert session values to strings for JSON safety
     return jsonify({k: str(v) for k, v in session.items()}), 200
+
+@app.route("/about/egg", methods=["GET"])
+def about_egg():
+    """
+    Visit /about/egg to unlock the About-page easter egg for this session.
+    Sets session['found_about_egg'] = True and redirects back to /about.
+    """
+    session["found_about_egg"] = True
+    return redirect(url_for("about"))
 
 if __name__ == "__main__":
     # ensure DB schema has the required order columns before serving

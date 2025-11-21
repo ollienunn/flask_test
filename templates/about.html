@@ -54,6 +54,12 @@
          </div>
        </div>
      </div>
+
+    <!-- hidden secret banner (revealed after secret sequence) -->
+    <div id="about-secret" class="alert alert-success mt-4" style="display:none;">
+      <strong>🎉 Secret unlocked!</strong>
+      <div class="mt-1">Well done — you found a hidden easter egg. <a href="/snake">Play the secret game</a> or explore more.</div>
+    </div>
    </main>
  
    <!-- Footer -->
@@ -116,6 +122,43 @@
 
 <!-- include the client script -->
 <script src="{{ url_for('static', filename='js/payment.js') }}" defer></script>
+
+<script>
+/* Konami-style detector for About page. On success it posts to /about/egg and reveals the banner. */
+(function(){
+  const SEQ = [38,38,40,40,37,39,37,39,66,65]; // Konami
+  let i = 0;
+  const CODE = "konami"; // matches default server ABOUT_EGG_CODE
+  function show() {
+    const el = document.getElementById('about-secret');
+    if (el) el.style.display = 'block';
+  }
+  async function notify() {
+    try {
+      const res = await fetch('/about/egg', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({code: CODE})
+      });
+      if (res.ok) {
+        const j = await res.json();
+        if (j.ok) show();
+      }
+    } catch(e) { /* ignore */ }
+  }
+  window.addEventListener('keydown', (e) => {
+    if (e.keyCode === SEQ[i]) {
+      i++;
+      if (i === SEQ.length) {
+        i = 0;
+        show(); notify();
+      }
+    } else {
+      i = 0;
+    }
+  });
+})();
+</script>
   
  </body>
 
