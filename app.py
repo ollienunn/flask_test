@@ -1,10 +1,10 @@
 from flask import Flask, render_template, g, request, redirect, url_for, jsonify, session, flash
 import sqlite3
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
+import os
 import re
 from werkzeug.utils import secure_filename
-import os
 import smtplib
 import ssl
 from email.message import EmailMessage
@@ -15,7 +15,10 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import json
 from dotenv import load_dotenv
 from cryptography.fernet import Fernet
-import os
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 DB_PATH = Path(__file__).parent / "store.db"
@@ -63,14 +66,18 @@ def admin_login():
     if username == ADMIN_USER and password == ADMIN_PASS:
         session["is_admin"] = True
         session["admin_user"] = username
+        session.permanent = False
+        session["last_active"] = datetime.now(timezone.utc).timestamp()
+        session["created_at"] = datetime.now(timezone.utc).timestamp()
         next_url = request.args.get("next") or url_for("admin_products")
         return redirect(next_url)
     return redirect(url_for("admin_login"))
 
 @app.route("/admin/logout")
 def admin_logout():
-    session.pop("is_admin", None)
-    session.pop("admin_user", None)
+    # fully clear session on admin logout to avoid stale flags
+    session.clear()
+    flash("Admin logged out.", "info")
     return redirect(url_for("index"))
 
 def get_db():
@@ -372,6 +379,9 @@ def register():
     db.commit()
     session["customer_id"] = cur.lastrowid
     session["customer_name"] = name
+    session.permanent = False
+    session["last_active"] = datetime.now(timezone.utc).timestamp()
+    session["created_at"] = datetime.now(timezone.utc).timestamp()
     # if there is a session cart, save it to DB
     if session.get("cart"):
         save_customer_cart(session["customer_id"], session["cart"])
@@ -386,7 +396,17 @@ def login():
     password = request.form.get("password") or ""
     db = get_db()
     row = db.execute("SELECT id, name, password FROM customers WHERE email = ?", (email,)).fetchone()
-    if not row or not row["password"] or not check_password_hash(row["password"], password):
+    logger.debug("Login attempt for email=%s found_row=%s", email, bool(row))
+    if not row:
+        flash("Invalid email or password.", "danger")
+        return redirect(url_for("login"))
+    if not row["password"]:
+        logger.debug("Account %s has no password set", email)
+        flash("Invalid email or password.", "danger")
+        return redirect(url_for("login"))
+    ok = check_password_hash(row["password"], password)
+    logger.debug("Password check for %s: %s", email, ok)
+    if not ok:
         flash("Invalid email or password.", "danger")
         return redirect(url_for("login"))
     # login success — merge session cart with stored cart and persist
@@ -395,18 +415,19 @@ def login():
     merged = merge_carts(sess_cart, stored)
     session["customer_id"] = row["id"]
     session["customer_name"] = row["name"]
+    session.permanent = False
+    session["last_active"] = datetime.now(timezone.utc).timestamp()
+    session["created_at"] = datetime.now(timezone.utc).timestamp()
     session["cart"] = merged
     save_customer_cart(row["id"], merged)
+    logger.debug("Login success, session keys: %s", list(session.keys()))
     flash("Logged in.", "success")
     return redirect(url_for("products"))
 
 @app.route("/logout")
 def logout():
-    # keep session cart in DB for logged-in user was already saved on actions;
-    # just pop auth fields and keep session['cart'] empty (customer cart stays in DB)
-    session.pop("customer_id", None)
-    session.pop("customer_name", None)
-    session.pop("cart", None)
+    # fully clear session on customer logout
+    session.clear()
     flash("Logged out.", "info")
     return redirect(url_for("products"))
 
@@ -935,6 +956,72 @@ def admin_debug():
         result["error"] = str(e)
 
     return jsonify(result)
+
+# session timeout in minutes (default 10)
+SESSION_TIMEOUT_MINUTES = int(os.environ.get("SESSION_TIMEOUT_MINUTES", "10"))
+# absolute max session age (minutes). After this age session is invalidated regardless of activity.
+SESSION_MAX_AGE_MINUTES = int(os.environ.get("SESSION_MAX_AGE_MINUTES", "1440"))  # 24 hours default
+
+@app.before_request
+def enforce_session_timeout():
+    """
+    Invalidate session if inactive longer than SESSION_TIMEOUT_MINUTES.
+    Keeps session non-permanent (do not rely on browser to drop cookies).
+    """
+    # skip session checks for static assets, service worker and simple health/debug endpoints
+    if request.path.startswith(("/static", "/sw.js", "/favicon.ico", "/admin/debug", "/admin/uploads")):
+        return
+
+    # update or expire session last_active timestamp
+    now_ts = datetime.now(timezone.utc).timestamp()
+    last = session.get("last_active")
+    timeout_secs = SESSION_TIMEOUT_MINUTES * 60
+
+    # absolute session age check (created_at)
+    created = session.get("created_at")
+    if created:
+        try:
+            created_ts = float(created)
+        except Exception:
+            created_ts = None
+        if created_ts:
+            max_age_secs = SESSION_MAX_AGE_MINUTES * 60
+            if (now_ts - created_ts) > max_age_secs:
+                session.clear()
+                if request.path.startswith("/admin"):
+                    flash("Session expired. Please log in again.", "info")
+                    return redirect(url_for("admin_login", next=request.path))
+                return
+
+    if last:
+        try:
+            last_ts = float(last)
+        except Exception:
+            last_ts = None
+
+        if last_ts and (now_ts - last_ts) > timeout_secs:
+            # expire session
+            session.clear()
+            # If an admin page was being accessed, redirect to admin login
+            if request.path.startswith("/admin"):
+                flash("Session expired due to inactivity. Please log in again.", "info")
+                return redirect(url_for("admin_login", next=request.path))
+            # otherwise allow request to continue as anonymous (session cleared)
+
+    # refresh last_active for logged-in users (only for non-static interactive requests)
+    if session.get("customer_id") or session.get("is_admin"):
+        session["last_active"] = now_ts
+        # set created_at when session first established (keeps absolute age tracking)
+        if "created_at" not in session:
+            session["created_at"] = now_ts
+
+@app.route("/debug/session")
+def debug_session():
+    # dev-only: allow when app.debug or request from localhost
+    if not app.debug and request.remote_addr not in ("127.0.0.1", "::1"):
+        abort(403)
+    # convert session values to strings for JSON safety
+    return jsonify({k: str(v) for k, v in session.items()}), 200
 
 if __name__ == "__main__":
     # ensure DB schema has the required order columns before serving
